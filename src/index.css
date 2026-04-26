@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+.ggsql-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.875rem;
+}
+.ggsql-table th,
+.ggsql-table td {
+  border: 1px solid var(--color-slate-200);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+}
+.ggsql-table thead {
+  background: var(--color-slate-50);
+  font-weight: 600;
+}
+.ggsql-table .truncation-row td {
+  text-align: center;
+  font-style: italic;
+  color: var(--color-slate-500);
+}
