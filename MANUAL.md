@@ -12,7 +12,7 @@ Browser ggsql playground. Paste ggsql in the editor on the left, get a chart on 
   - Drop a sidebar variable onto a dropzone → `<col> AS <aes>` is added to the layer's MAPPING. Click `×` on a chip to clear.
   - Only one card is expanded at a time; click the header to toggle.
   - `+ Add chart` adds a new layer; the `×` in an expanded header removes it.
-  - `Labels` is pinned at the bottom — expand to set Title, Subtitle, Caption (emitted as `LABEL title => '...', ...`).
+  - `Labels` is pinned at the bottom — expand to set Title, Subtitle (emitted as `LABEL title => '...', ...`).
 - **Code panel (between build pane and chart).** Shows the generated ggsql in real time. **Copy** button writes the current query to the clipboard.
 - **Chart pane (right).** Live-renders the generated ggsql via `vega-embed` (SVG renderer, export-only menu) against the sidebar's active table.
 - **Errors / warnings (bottom).** Chart errors and Vega warnings appear here.
@@ -39,7 +39,7 @@ Open <http://localhost:5173>.
 2. Drag variables from the sidebar onto the dropzones in the middle build pane.
 3. Pick a chart type in the dropdown at the top of each layer.
 4. Add more layers with `+ Add chart` if you want overlays (e.g. point + smooth).
-5. Optionally expand `Labels` at the bottom to set title/subtitle/caption.
+5. Optionally expand `Labels` at the bottom to set title/subtitle.
 
 The chart re-renders on every change. ggsql parse / execute errors appear in the bottom problems pane.
 
