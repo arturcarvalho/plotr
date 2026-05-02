@@ -4,6 +4,3 @@ dist
 *.log
 .vite
 *.tsbuildinfo
-*.md
-*.json
-*.svg
