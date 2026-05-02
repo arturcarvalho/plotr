@@ -123,14 +123,24 @@ export function LayerCard({
               onToggleSettings={() => onToggleMappingPanel("y")}
             />
           </Field>
-          <Field label="Colour">
+          <Field label="Fill">
             <Dropzone
-              value={layer.mappings.color}
-              source={{ layerId: layer.id, aes: "color" }}
-              settingsOpen={openMappingAes === "color"}
-              onDrop={(c, src) => onDrop("color", c, src)}
-              onClear={() => onMap("color", undefined)}
-              onToggleSettings={() => onToggleMappingPanel("color")}
+              value={layer.mappings.fill}
+              source={{ layerId: layer.id, aes: "fill" }}
+              settingsOpen={openMappingAes === "fill"}
+              onDrop={(c, src) => onDrop("fill", c, src)}
+              onClear={() => onMap("fill", undefined)}
+              onToggleSettings={() => onToggleMappingPanel("fill")}
+            />
+          </Field>
+          <Field label="Stroke">
+            <Dropzone
+              value={layer.mappings.stroke}
+              source={{ layerId: layer.id, aes: "stroke" }}
+              settingsOpen={openMappingAes === "stroke"}
+              onDrop={(c, src) => onDrop("stroke", c, src)}
+              onClear={() => onMap("stroke", undefined)}
+              onToggleSettings={() => onToggleMappingPanel("stroke")}
             />
           </Field>
           <Field label="Opacity">

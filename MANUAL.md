@@ -8,7 +8,7 @@ Browser ggsql playground. Paste ggsql in the editor on the left, get a chart on 
 - **Variable list.** Once a file is loaded, the sidebar lists columns grouped by type. Non-numeric on top (`T` string, `✓` bool, `📅` date), numeric (`#`) at the bottom. Each row is **draggable** onto the build pane.
 - **Change file** button at the sidebar footer resets to the empty state.
 - **Build pane (middle).** Composes a ggsql query layer-by-layer.
-  - Each layer (DRAW) is a card with a chart-type select (point, bar, histogram, line, smooth, ...) and dropzones for `X` / `Y` / `Colour` / `Opacity` / `Size` / `Panels` (Top + Right axes → FACET).
+  - Each layer (DRAW) is a card with a chart-type select (point, bar, histogram, line, smooth, ...) and dropzones for `X` / `Y` / `Fill` / `Stroke` / `Opacity` / `Size` / `Panels` (Top + Right axes → FACET).
   - Drop a sidebar variable onto a dropzone → `<col> AS <aes>` is added to the layer's MAPPING. Click `×` on a chip to clear.
   - Only one card is expanded at a time; click the header to toggle.
   - `+ Add chart` adds a new layer; the `×` in an expanded header removes it.

@@ -127,32 +127,15 @@ describe("buildQuery resolves AUTO via column kinds", () => {
   });
 });
 
-describe("color routing per layer type", () => {
-  it("solid layer (point) emits AS fill instead of AS color", () => {
+describe("buildQuery emits fill/stroke directly", () => {
+  it("mapping fill emits AS fill", () => {
     const q = buildQuery(
       "ggsql:penguins",
       [
         {
           id: "L",
           draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", color: "species" },
-        } as Layer,
-      ],
-      {},
-      COLS,
-    );
-    expect(q).toContain("species AS fill");
-    expect(q).not.toContain("species AS color");
-  });
-
-  it("solid layer (bar) emits AS fill", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "bar",
-          mappings: { x: "species", color: "species" },
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
         } as Layer,
       ],
       {},
@@ -161,54 +144,59 @@ describe("color routing per layer type", () => {
     expect(q).toContain("species AS fill");
   });
 
-  it("line-like layer (line) emits AS color", () => {
+  it("mapping stroke emits AS stroke", () => {
     const q = buildQuery(
       "ggsql:penguins",
       [
         {
           id: "L",
           draw: "line",
-          mappings: { x: "bill_len", y: "bill_dep", color: "species" },
+          mappings: { x: "bill_len", y: "bill_dep", stroke: "species" },
         } as Layer,
       ],
       {},
       COLS,
     );
-    expect(q).toContain("species AS color");
-    expect(q).not.toContain("species AS fill");
+    expect(q).toContain("species AS stroke");
   });
 
-  it("line-like layer (smooth) emits AS color", () => {
+  it("mapping both fill and stroke emits both clauses", () => {
     const q = buildQuery(
       "ggsql:penguins",
       [
         {
           id: "L",
-          draw: "smooth",
-          mappings: { x: "bill_len", y: "bill_dep", color: "species" },
-        } as Layer,
-      ],
-      {},
-      COLS,
-    );
-    expect(q).toContain("species AS color");
-  });
-
-  it("auto-resolved bar (discrete x) emits AS fill", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: AUTO,
-          mappings: { x: "species", color: "species" },
+          draw: "point",
+          mappings: {
+            x: "bill_len",
+            y: "bill_dep",
+            fill: "species",
+            stroke: "species",
+          },
         } as Layer,
       ],
       {},
       COLS,
     );
     expect(q).toContain("species AS fill");
-    expect(q).toContain("DRAW bar");
+    expect(q).toContain("species AS stroke");
+  });
+
+  it("line layer with stroke emits AS stroke (no implicit color routing)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "bill_len", y: "bill_dep", stroke: "species" },
+        } as Layer,
+      ],
+      {},
+      COLS,
+    );
+    expect(q).not.toContain("AS color");
+    expect(q).toContain("species AS stroke");
   });
 });
 
@@ -251,7 +239,7 @@ describe("buildQuery emits per-layer SETTING", () => {
     );
   });
 
-  it("color/opacity/size on point", () => {
+  it("fill/opacity/size on point", () => {
     const q = buildQuery(
       "ggsql:penguins",
       [
@@ -259,15 +247,32 @@ describe("buildQuery emits per-layer SETTING", () => {
           id: "L",
           draw: "point",
           mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { color: "blue", opacity: 0.6, size: 3 },
+          settings: { fill: "blue", opacity: 0.6, size: 3 },
         },
       ],
       {},
       COLS,
     );
     expect(q).toContain(
-      "DRAW point MAPPING bill_len AS x, bill_dep AS y SETTING color => 'blue', opacity => 0.6, size => 3",
+      "DRAW point MAPPING bill_len AS x, bill_dep AS y SETTING fill => 'blue', opacity => 0.6, size => 3",
     );
+  });
+
+  it("stroke setting on line", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { stroke: "red" },
+        },
+      ],
+      {},
+      COLS,
+    );
+    expect(q).toContain("SETTING stroke => 'red'");
   });
 
   it("escapes single quotes in string settings", () => {
@@ -278,13 +283,13 @@ describe("buildQuery emits per-layer SETTING", () => {
           id: "L",
           draw: "point",
           mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { color: "O'Brien" },
+          settings: { fill: "O'Brien" },
         },
       ],
       {},
       COLS,
     );
-    expect(q).toContain("SETTING color => 'O''Brien'");
+    expect(q).toContain("SETTING fill => 'O''Brien'");
   });
 
   it("undefined or empty settings → no SETTING clause", () => {

@@ -14,8 +14,8 @@ const sample: Persisted = {
     {
       id: "L1",
       draw: "auto",
-      mappings: { x: "bill_len", y: "bill_dep", color: "species" },
-      settings: { color: "blue", opacity: 0.6 },
+      mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+      settings: { fill: "blue", opacity: 0.6 },
     } satisfies Layer,
     {
       id: "L2",
@@ -197,13 +197,13 @@ describe("deserialize validates schema", () => {
             id: "L",
             draw: "point",
             mappings: { x: "a" },
-            settings: { color: "red", rogue: "x" },
+            settings: { fill: "red", rogue: "x" },
           },
         ],
       }),
     );
     expect(r?.layers).toHaveLength(1);
-    expect(r!.layers[0].settings).toEqual({ color: "red" });
+    expect(r!.layers[0].settings).toEqual({ fill: "red" });
   });
 
   it("strips settings entries with wrong type", () => {
@@ -214,7 +214,7 @@ describe("deserialize validates schema", () => {
             id: "L",
             draw: "point",
             mappings: { x: "a" },
-            settings: { color: 42, opacity: "loud" },
+            settings: { fill: 42, opacity: "loud" },
           },
         ],
       }),

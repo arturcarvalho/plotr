@@ -3,6 +3,7 @@ import vegaEmbed from "vega-embed";
 import { Warn } from "vega";
 import { ggsql, type ColumnInfo } from "./lib/ggsql";
 import {
+  AESTHETICS,
   AUTO,
   buildQuery,
   type Aes,
@@ -305,7 +306,7 @@ export default function App() {
   const closePanel = () => setActivePanel(null);
 
   const hasMappings = layers.some((l) =>
-    (["x", "y", "color", "opacity", "size"] as const).some((a) => l.mappings[a]),
+    AESTHETICS.some((a) => l.mappings[a]),
   );
   const isEmpty = !activeTable || !hasMappings;
 

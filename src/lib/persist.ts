@@ -35,7 +35,11 @@ const SETTING_NUMERIC: ReadonlySet<string> = new Set([
   "opacity",
   "size",
 ]);
-const SETTING_STRING: ReadonlySet<string> = new Set(["position", "color"]);
+const SETTING_STRING: ReadonlySet<string> = new Set([
+  "position",
+  "fill",
+  "stroke",
+]);
 
 const newId = () => Math.random().toString(36).slice(2, 9);
 

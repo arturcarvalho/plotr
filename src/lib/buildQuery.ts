@@ -1,7 +1,7 @@
 import type { ColumnInfo } from "./ggsql";
 import { resolveDraw } from "./autoChart";
 
-export const AESTHETICS = ["x", "y", "color", "opacity", "size"] as const;
+export const AESTHETICS = ["x", "y", "fill", "stroke", "opacity", "size"] as const;
 export const FACETS = ["facet_col", "facet_row"] as const;
 
 export type Aes = (typeof AESTHETICS)[number] | (typeof FACETS)[number];
@@ -11,7 +11,8 @@ export type Position = "identity" | "stack" | "dodge" | "jitter";
 export interface LayerSettings {
   width?: number;
   position?: Position;
-  color?: string;
+  fill?: string;
+  stroke?: string;
   opacity?: number;
   size?: number;
 }
@@ -67,7 +68,7 @@ const formatSettingValue = (v: unknown): string => {
 const settingPairs = (entries: Array<[string, unknown]>): string =>
   entries.map(([k, v]) => `${k} => ${formatSettingValue(v)}`).join(", ");
 
-const SETTING_ORDER = ["width", "position", "color", "opacity", "size"] as const;
+const SETTING_ORDER = ["width", "position", "fill", "stroke", "opacity", "size"] as const;
 
 const layerSettingClause = (s: LayerSettings | undefined): string => {
   if (!s) return "";
@@ -76,22 +77,6 @@ const layerSettingClause = (s: LayerSettings | undefined): string => {
   ).map((k) => [k, s[k]] as [string, unknown]);
   return entries.length ? ` SETTING ${settingPairs(entries)}` : "";
 };
-
-// ggsql's `color` aesthetic expands to BOTH `fill` and `stroke` in the
-// generated Vega-Lite spec, producing two duplicate legends. To get a single
-// legend, we mirror the official ggsql examples: emit `fill` for solid layers
-// (bar/point/area/…) and reserve `color` for line-like layers where there is
-// no fill to set. See `posit-dev/ggsql/doc/syntax/layer/type/bar.qmd`.
-const LINE_LIKE_DRAWS = new Set([
-  "line",
-  "path",
-  "smooth",
-  "rule",
-  "range",
-]);
-
-const colorAesFor = (draw: string): string =>
-  LINE_LIKE_DRAWS.has(draw) ? "color" : "fill";
 
 const projectClause = (p: ProjectSettings | undefined): string[] => {
   if (!p) return [];
@@ -118,10 +103,9 @@ export function buildQuery(
     if (!hasMappings) continue;
     const draw = resolveDraw(l, columns);
     if (!draw) continue;
-    const dataMaps = AESTHETICS.filter((a) => l.mappings[a]).map((a) => {
-      const aes = a === "color" ? colorAesFor(draw) : a;
-      return `${l.mappings[a]} AS ${aes}`;
-    });
+    const dataMaps = AESTHETICS.filter((a) => l.mappings[a]).map(
+      (a) => `${l.mappings[a]} AS ${a}`,
+    );
     drawLines.push(
       `DRAW ${draw} MAPPING ${dataMaps.join(", ")}${layerSettingClause(l.settings)}`,
     );

@@ -29,15 +29,11 @@ export function MappingPanel({
   onClose,
 }: Props) {
   const aesLabel =
-    aes === "color"
-      ? "Colour"
-      : aes === "opacity"
-        ? "Opacity"
-        : aes === "facet_col"
-          ? "Top axis"
-          : aes === "facet_row"
-            ? "Right axis"
-            : cap(aes);
+    aes === "facet_col"
+      ? "Top axis"
+      : aes === "facet_row"
+        ? "Right axis"
+        : cap(aes);
 
   return (
     <aside className="flex h-full w-[280px] shrink-0 flex-col bg-slate-50 p-1">
@@ -71,11 +67,19 @@ export function MappingPanel({
         </header>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-          {aes === "color" && (
+          {aes === "fill" && (
             <ColorField
-              value={settings.color ?? null}
+              value={settings.fill ?? null}
               onChange={(v) =>
-                onChangeSettings({ ...settings, color: v ?? undefined })
+                onChangeSettings({ ...settings, fill: v ?? undefined })
+              }
+            />
+          )}
+          {aes === "stroke" && (
+            <ColorField
+              value={settings.stroke ?? null}
+              onChange={(v) =>
+                onChangeSettings({ ...settings, stroke: v ?? undefined })
               }
             />
           )}
