@@ -1,5 +1,5 @@
 /* @ts-self-types="./ggsql_wasm.d.ts" */
-import { convert_csv, convert_parquet } from './snippets/ggsql-wasm-3dd2d89ecaa2feb4/library/dist/lib.js';
+import { convert_csv, convert_parquet } from './snippets/ggsql-wasm-ba9ba8aa7eb18b40/library/dist/lib.js';
 
 
 /**
@@ -230,11 +230,11 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).call(getObject(arg1), getObject(arg2));
             return addHeapObject(ret);
         }, arguments); },
-        __wbg_convert_csv_04f2d9050a7f1f9d: function() { return handleError(function (arg0, arg1) {
+        __wbg_convert_csv_0a6d4e89533f7db0: function() { return handleError(function (arg0, arg1) {
             const ret = convert_csv(getArrayU8FromWasm0(arg0, arg1));
             return addHeapObject(ret);
         }, arguments); },
-        __wbg_convert_parquet_79a152947f01c3c2: function() { return handleError(function (arg0, arg1) {
+        __wbg_convert_parquet_e448c0f02c4a0570: function() { return handleError(function (arg0, arg1) {
             const ret = convert_parquet(getArrayU8FromWasm0(arg0, arg1));
             return addHeapObject(ret);
         }, arguments); },
@@ -270,14 +270,11 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).getMonth();
             return ret;
         },
-        __wbg_getRandomValues_3f44b700395062e5: function() { return handleError(function (arg0, arg1) {
+        __wbg_getRandomValues_477b66419bbb968d: function() { return handleError(function (arg0, arg1) {
             globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
         }, arguments); },
         __wbg_getRandomValues_c44a50d8cfdaebeb: function() { return handleError(function (arg0, arg1) {
             getObject(arg0).getRandomValues(getObject(arg1));
-        }, arguments); },
-        __wbg_getRandomValues_e17307db78dbd90b: function() { return handleError(function (arg0, arg1) {
-            globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
         }, arguments); },
         __wbg_getRandomValues_ef12552bf5acd2fe: function() { return handleError(function (arg0, arg1) {
             globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
@@ -345,7 +342,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_2783(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_7476(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -437,8 +434,8 @@ function __wbg_get_imports() {
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 200, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2711);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 308, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_7404);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000002: function(arg0) {
@@ -470,10 +467,10 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_2711(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_7404(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_2711(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_7404(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -484,8 +481,8 @@ function __wasm_bindgen_func_elem_2711(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_2783(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_2783(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_7476(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_7476(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
 const GgsqlContextFinalization = (typeof FinalizationRegistry === 'undefined')

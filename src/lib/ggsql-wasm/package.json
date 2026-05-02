@@ -5,7 +5,7 @@
     "ggsql Team"
   ],
   "description": "WebAssembly bindings for ggsql.",
-  "version": "0.2.7",
+  "version": "0.3.1",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,0 +1,512 @@
+[
+  {
+    "path": ".gitignore",
+    "fileName": ".gitignore",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 7,
+          "updatedAt": "2026-05-02T09:09:11Z",
+          "state": "reviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "gen.sh",
+    "fileName": "gen.sh",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 33,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "index.html",
+    "fileName": "index.html",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 13,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "loc.sh",
+    "fileName": "loc.sh",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 3,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "run.sh",
+    "fileName": "run.sh",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 2,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "scripts/vl2svg.mjs",
+    "fileName": "vl2svg.mjs",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 17,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/App.tsx",
+    "fileName": "App.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 404,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/BuildPane.tsx",
+    "fileName": "BuildPane.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 116,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/ChartPanel.tsx",
+    "fileName": "ChartPanel.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 294,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/CodePanel.tsx",
+    "fileName": "CodePanel.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 77,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/DeleteBanner.tsx",
+    "fileName": "DeleteBanner.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 35,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/Dropzone.tsx",
+    "fileName": "Dropzone.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 131,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/Errors.tsx",
+    "fileName": "Errors.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 35,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/LabelsCard.tsx",
+    "fileName": "LabelsCard.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 36,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/LabelsPanel.tsx",
+    "fileName": "LabelsPanel.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 85,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/LayerCard.tsx",
+    "fileName": "LayerCard.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 200,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/MappingPanel.tsx",
+    "fileName": "MappingPanel.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 213,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/Sidebar.tsx",
+    "fileName": "Sidebar.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 257,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/components/Viz.tsx",
+    "fileName": "Viz.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 23,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/index.css",
+    "fileName": "index.css",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 35,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/autoChart.test.ts",
+    "fileName": "autoChart.test.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 127,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/autoChart.ts",
+    "fileName": "autoChart.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 94,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/buildQuery.test.ts",
+    "fileName": "buildQuery.test.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 356,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/buildQuery.ts",
+    "fileName": "buildQuery.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 161,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/dragSignal.ts",
+    "fileName": "dragSignal.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 60,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/ggsql-wasm/LICENSE",
+    "fileName": "LICENSE",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 8,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/ggsql-wasm/ggsql_wasm.d.ts",
+    "fileName": "ggsql_wasm.d.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 106,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/ggsql-wasm/ggsql_wasm.js",
+    "fileName": "ggsql_wasm.js",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 833,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/ggsql-wasm/ggsql_wasm_bg.wasm.d.ts",
+    "fileName": "ggsql_wasm_bg.wasm.d.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 32,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/ggsql.ts",
+    "fileName": "ggsql.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 102,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/persist.test.ts",
+    "fileName": "persist.test.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 170,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/lib/persist.ts",
+    "fileName": "persist.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 136,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "src/main.tsx",
+    "fileName": "main.tsx",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 11,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  },
+  {
+    "path": "vite.config.ts",
+    "fileName": "vite.config.ts",
+    "commit": "238ee61",
+    "reviewers": {
+      "Artur Carvalho": [
+        {
+          "startLine": 1,
+          "endLine": 12,
+          "updatedAt": "2026-05-02T09:06:48Z",
+          "state": "unreviewed"
+        }
+      ]
+    }
+  }
+]
