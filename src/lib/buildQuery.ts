@@ -24,6 +24,7 @@ export interface Layer {
   draw: string;
   mappings: Partial<Record<Aes, string>>;
   settings?: LayerSettings;
+  disabled?: boolean;
 }
 
 export interface Labels {
@@ -37,6 +38,7 @@ export interface Labels {
 export interface LabelsLayer extends Labels {
   id: string;
   position: number;
+  disabled?: boolean;
 }
 
 export interface ProjectSettings {
@@ -133,6 +135,7 @@ export function buildQuery(
 ): string | null {
   const mergedLabels: Labels = {};
   for (const l of labels) {
+    if ((l as LabelsLayer).disabled) continue;
     if (l.title) mergedLabels.title = l.title;
     if (l.subtitle) mergedLabels.subtitle = l.subtitle;
     if (l.caption) mergedLabels.caption = l.caption;
@@ -147,6 +150,7 @@ export function buildQuery(
 
   const drawLines: string[] = [];
   for (const l of layers) {
+    if (l.disabled) continue;
     const hasOwn = AESTHETICS.some((a) => l.mappings[a]);
     if (!hasOwn && !sharedHasAesthetic) continue;
     const draw = resolveDraw(l, columns, sharedMappings);

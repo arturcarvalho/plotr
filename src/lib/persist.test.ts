@@ -64,6 +64,35 @@ describe("serialize / deserialize round-trip", () => {
     const r = await deserialize(s);
     expect(r?.layers.map((l) => l.id)).toEqual(["L1", "L2"]);
   });
+
+  it("labels disabled flag round-trips", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [{ id: "L", position: 0, title: "x", disabled: true }],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.labels[0].disabled).toBe(true);
+  });
+
+  it("layer disabled flag round-trips", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "a", y: "b" },
+          disabled: true,
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].disabled).toBe(true);
+  });
 });
 
 describe("serialize strips defaults", () => {

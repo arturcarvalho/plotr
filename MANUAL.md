@@ -6,6 +6,7 @@ Browser ggsql playground. Paste ggsql in the editor on the left, get a chart on 
 
 ## Features
 
+- **Empty state.** Cold-start shows only the data panel (left) and a 2-step "Get started" tutorial in place of the chart. Picking a dataset reveals the Build panel + side panels with a fast slide-in; rendering a chart hides the tutorial and shows the chart + bottom tabs.
 - **Sidebar (left).** Drag or browse a CSV — or click "Palmer Penguins" for the built-in dataset.
 - **Variable list.** Once a file is loaded, the sidebar lists columns grouped by type. Non-numeric on top (`T` string, `✓` bool, `📅` date), numeric (`#`) at the bottom. Each row is **draggable** onto the build pane.
 - **Change file** button at the sidebar footer resets to the empty state.
@@ -15,7 +16,7 @@ Browser ggsql playground. Paste ggsql in the editor on the left, get a chart on 
   - Click any icon to open its detail panel on the right: chart-type picker grid + dropzones for `X` / `Y` / `Fill` / `Stroke` / `Opacity` / `Size` / `Panels` (`rows` / `columns` → FACET), bar Width/Position when applicable, Plot settings (clip), and a Remove-layer button.
   - Drop a sidebar variable onto a dropzone → `<col> AS <aes>`. Drag chip away or click the cog → per-aesthetic settings panel.
   - `+` at the bottom opens a `Chart` / `Labels` dropdown; new items append just above `+` and are auto-selected.
-  - `×` floats on hover/selected to remove an icon.
+  - On hover, two corner buttons appear on each chart layer (and each labels layer): top-right `×` removes it, top-left eye toggles **disabled** (skipped from `DRAW` / `LABEL`, dimmed and grayscaled in the build pane). The shared-variables icon at the top is always present.
   - Reset: clicking `Change file` in the sidebar clears the data and the entire chart config.
   - Only one side panel (Shared mappings / a layer / a mapping / Labels) is visible at a time.
 - **GGSQL tab (bottom).** Shows the generated ggsql in real time. **Copy** button writes the current query to the clipboard.

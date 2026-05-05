@@ -18,6 +18,8 @@ interface Props {
   onAddLabels: () => void;
   onRemoveLayer: (id: string) => void;
   onRemoveLabels: (id: string) => void;
+  onToggleLayerDisabled: (id: string) => void;
+  onToggleLabelsDisabled: (id: string) => void;
 }
 
 export function BuildPanel({
@@ -34,6 +36,8 @@ export function BuildPanel({
   onAddLabels,
   onRemoveLayer,
   onRemoveLabels,
+  onToggleLayerDisabled,
+  onToggleLabelsDisabled,
 }: Props) {
   // Labels with position > layers.length (e.g. from a stale URL hash that
   // outlived a layer removal) are clamped to the final slot so they still
@@ -48,15 +52,17 @@ export function BuildPanel({
       <div key={l.id} className="self-center">
         <LabelsCard
           open={activeLabelsId === l.id}
+          disabled={l.disabled === true}
           onToggle={() => onToggleLabels(l.id)}
           onRemove={() => onRemoveLabels(l.id)}
+          onToggleDisabled={() => onToggleLabelsDisabled(l.id)}
         />
       </div>
     ));
 
   return (
     <aside className="relative z-30 flex h-full w-14 shrink-0 flex-col bg-app-chrome">
-      <div className="flex min-h-0 flex-1 flex-col items-center border border-stone-300 bg-white">
+      <div className="flex min-h-0 flex-1 flex-col items-center border-y border-r border-stone-300 bg-white">
         <div className="flex h-[52px] w-full items-center justify-center border-b border-stone-200">
           <button
             type="button"
@@ -73,7 +79,7 @@ export function BuildPanel({
             <SharedLayersIcon />
           </button>
         </div>
-        <div className="mt-2 flex min-h-0 flex-1 flex-col items-center self-stretch overflow-y-auto overflow-x-hidden">
+        <div className="flex min-h-0 flex-1 flex-col items-center self-stretch overflow-y-auto overflow-x-hidden py-3">
           {layers.map((layer, i) => (
             <Fragment key={layer.id}>
               {renderLabels(i)}
@@ -81,12 +87,10 @@ export function BuildPanel({
                 <LayerCard
                   resolvedDraw={resolvedDrawByLayerId[layer.id] ?? null}
                   selected={activeLayerId === layer.id}
+                  disabled={layer.disabled === true}
                   onToggle={() => onToggleLayer(layer.id)}
-                  onRemove={
-                    layers.length > 1
-                      ? () => onRemoveLayer(layer.id)
-                      : undefined
-                  }
+                  onRemove={() => onRemoveLayer(layer.id)}
+                  onToggleDisabled={() => onToggleLayerDisabled(layer.id)}
                 />
               </div>
             </Fragment>

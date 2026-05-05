@@ -2,6 +2,18 @@
 
 @theme {
   --color-app-chrome: var(--color-stone-100);
+  --animate-slide-in-left: slide-in-left 180ms ease-out;
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 html,

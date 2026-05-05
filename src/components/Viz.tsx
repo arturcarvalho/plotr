@@ -1,23 +1,17 @@
 import { forwardRef } from "react";
 
 interface Props {
-  empty: boolean;
   hasError: boolean;
   onShowProblems: () => void;
 }
 
 export const Viz = forwardRef<HTMLDivElement, Props>(
-  ({ empty, hasError, onShowProblems }, ref) => {
+  ({ hasError, onShowProblems }, ref) => {
     return (
       <div className="relative h-full w-full overflow-hidden">
         <div ref={ref} className="absolute inset-0 overflow-hidden p-4" />
-        {empty && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-stone-500">
-            Drag variables to the X, Y, etc. to render a chart.
-          </div>
-        )}
         {hasError && (
-          <div className="absolute left-1/2 top-3 z-10 flex -transtone-x-1/2 items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 font-mono text-xs text-red-800 shadow-sm">
+          <div className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 font-mono text-xs text-red-800 shadow-sm">
             <svg
               width="14"
               height="14"

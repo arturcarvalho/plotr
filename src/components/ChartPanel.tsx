@@ -50,19 +50,22 @@ export function ChartPanel({
     >
       <DeleteBanner show={dragging && !hovered} />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-y border-r border-stone-300 bg-white">
-        <header className="flex h-[52px] items-center border-b border-stone-200">
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="flex h-full flex-1 items-center justify-between px-3 text-left font-mono text-sm font-semibold text-stone-800 hover:bg-stone-100"
-            title="Open chart settings"
-          >
-            <span>{title}</span>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="Open chart settings"
+          title="Open chart settings"
+          className="group flex h-[52px] w-full shrink-0 items-stretch border-b border-stone-200 transition-colors hover:bg-stone-100"
+        >
+          <span className="flex flex-1 items-center px-3 text-left font-mono text-sm font-semibold text-stone-800">
+            {title}
+          </span>
+          <span className="flex w-10 shrink-0 items-center justify-center text-stone-400 group-hover:text-stone-700">
             <ChevronRightIcon />
-          </button>
-        </header>
+          </span>
+        </button>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto py-3 pl-3">
           <MappingFields
             mappings={layer.mappings}
             sourceId={layer.id}
@@ -80,15 +83,14 @@ export function ChartPanel({
 function ChevronRightIcon() {
   return (
     <svg
-      width="12"
-      height="12"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.4"
+      strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="text-stone-400"
       aria-hidden
     >
       <polyline points="9 18 15 12 9 6" />

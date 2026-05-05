@@ -13,20 +13,16 @@ interface Props {
   placeholder?: string;
   value?: string;
   source: Source;
-  settingsOpen?: boolean;
   onDrop: (col: string, src?: Source) => void;
   onClear: () => void;
-  onToggleSettings?: () => void;
 }
 
 export function Dropzone({
   placeholder,
   value,
   source,
-  settingsOpen,
   onDrop,
   onClear,
-  onToggleSettings,
 }: Props) {
   const [over, setOver] = useState(false);
 
@@ -92,34 +88,6 @@ export function Dropzone({
         <span className="font-mono text-xs italic text-stone-400">
           {placeholder ?? ""}
         </span>
-      )}
-      {onToggleSettings && (
-        <button
-          type="button"
-          onClick={onToggleSettings}
-          aria-label="Settings"
-          title={settingsOpen ? "Close settings" : "Open settings"}
-          className={[
-            "ml-auto rounded p-0.5 transition-colors",
-            settingsOpen
-              ? "bg-stone-800 text-stone-100"
-              : "text-stone-400 hover:bg-stone-100 hover:text-stone-700",
-          ].join(" ")}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
       )}
     </div>
   );

@@ -28,6 +28,7 @@ import {
 } from "./components/SharedMappingsPanel";
 import { Viz } from "./components/Viz";
 import { ProblemsPanel } from "./components/ProblemsPanel";
+import { Tutorial } from "./components/Tutorial";
 import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 
 const newId = () => Math.random().toString(36).slice(2, 9);
@@ -332,6 +333,18 @@ export default function App() {
     setSecondaryPanel(null);
   };
 
+  const onToggleLayerDisabled = (id: string) => {
+    setLayers((ls) =>
+      ls.map((l) => (l.id === id ? { ...l, disabled: !l.disabled } : l)),
+    );
+  };
+
+  const onToggleLabelsDisabled = (id: string) => {
+    setLabels((arr) =>
+      arr.map((l) => (l.id === id ? { ...l, disabled: !l.disabled } : l)),
+    );
+  };
+
   const onResetConfig = () => {
     const layer = initialLayer();
     setLayers([layer]);
@@ -431,21 +444,16 @@ export default function App() {
   const panelLayer = panelLayerId
     ? layers.find((l) => l.id === panelLayerId) ?? null
     : null;
+  const activeLabels =
+    activePanel?.kind === "labels"
+      ? labels.find((l) => l.id === activePanel.labelsId) ?? null
+      : null;
+  const tutorialWrapperCls = "shrink-0 whitespace-nowrap pl-8 pt-px";
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-white">
-      <main className="flex min-h-0 flex-1">
-        <div className="flex min-h-0 flex-col bg-app-chrome">
-          <div className="flex items-baseline gap-2 px-3 py-2 font-mono">
-            <span className="text-sm font-semibold text-stone-800">plotr</span>
-            <span className="text-[10px] tracking-wide text-stone-400">
-              A drag-and-drop ggsql chart builder
-            </span>
-            <span className="rounded border border-amber-300 bg-amber-100 px-1 py-px text-[8px] font-bold uppercase tracking-wide text-amber-800">
-              Alpha
-            </span>
-          </div>
-          <div className="flex min-h-0 flex-1 p-2 pt-0">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-chrome">
+      <main className="relative flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 p-2">
             <DataPanel
               ready={ready}
               activeTable={activeTable}
@@ -454,102 +462,155 @@ export default function App() {
               onLoadPenguins={() => setActiveTable("ggsql:penguins")}
               onChangeFile={onChangeFile}
             />
-            <BuildPanel
-              layers={layers}
-              labels={labels}
-              activeLayerId={panelLayerId}
-              activeLabelsId={
-                activePanel?.kind === "labels" ? activePanel.labelsId : null
-              }
-              sharedOpen={activePanel?.kind === "shared"}
-              resolvedDrawByLayerId={resolvedDrawByLayerId}
-              onToggleLayer={toggleLayerPanel}
-              onToggleLabels={toggleLabelsPanel}
-              onToggleShared={toggleSharedPanel}
-              onAddLayer={onAddLayer}
-              onAddLabels={onAddLabels}
-              onRemoveLayer={onRemoveLayer}
-              onRemoveLabels={onRemoveLabels}
-            />
-            {activePanel?.kind === "labels" &&
-            labels.find((l) => l.id === activePanel.labelsId) ? (
-              <LabelsPanel
-                labels={labels.find((l) => l.id === activePanel.labelsId)!}
-                onChange={(patch) => onUpdateLabels(activePanel.labelsId, patch)}
-              />
-            ) : activePanel?.kind === "shared" ? (
-              <SharedMappingsPanel
-                mappings={sharedMappings}
-                onMap={(aes, col) => onMap(SHARED_MAPPINGS_KEY, aes, col)}
-                onDrop={(aes, col, src) =>
-                  onDrop(SHARED_MAPPINGS_KEY, aes, col, src)
-                }
-              />
-            ) : activePanel?.kind === "layer" && panelLayer ? (
-              <ChartPanel
-                layer={panelLayer}
-                resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
-                openMappingAes={
-                  secondaryPanel?.kind === "mapping" ? secondaryPanel.aes : null
-                }
-                onMap={(aes, col) => onMap(panelLayer.id, aes, col)}
-                onDrop={(aes, col, src) => onDrop(panelLayer.id, aes, col, src)}
-                onToggleMappingSettings={toggleMappingPanel}
-                onOpenSettings={toggleSettingsPanel}
-              />
-            ) : (
-              <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
+            {!activeTable && (
+              <div className={tutorialWrapperCls}>
+                <Tutorial step1Done={!!activeTable} />
+              </div>
             )}
-            {secondaryPanel?.kind === "settings" && panelLayer ? (
-              <ChartTypePanel
-                resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
-                compatibleDraws={compatibleDrawsByLayerId[panelLayer.id] ?? []}
-                settings={panelLayer.settings ?? {}}
-                project={project}
-                onChangeDraw={(d) => onChangeDraw(panelLayer.id, d)}
-                onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
-                onChangeProject={setProject}
-                onRemove={
-                  layers.length > 1
-                    ? () => onRemoveLayer(panelLayer.id)
-                    : undefined
-                }
-                onClose={closeSecondaryPanel}
-              />
-            ) : secondaryPanel?.kind === "mapping" && panelLayer ? (
-              <MappingPanel
-                aes={secondaryPanel.aes}
-                settings={panelLayer.settings ?? {}}
-                onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
-                onClose={closeSecondaryPanel}
-              />
-            ) : (
-              <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
+            {activeTable && (
+              <div
+                key={activeTable}
+                className="flex animate-slide-in-left"
+              >
+                <div className="relative flex">
+                <BuildPanel
+                  layers={layers}
+                  labels={labels}
+                  activeLayerId={panelLayerId}
+                  activeLabelsId={
+                    activePanel?.kind === "labels"
+                      ? activePanel.labelsId
+                      : null
+                  }
+                  sharedOpen={activePanel?.kind === "shared"}
+                  resolvedDrawByLayerId={resolvedDrawByLayerId}
+                  onToggleLayer={toggleLayerPanel}
+                  onToggleLabels={toggleLabelsPanel}
+                  onToggleShared={toggleSharedPanel}
+                  onAddLayer={onAddLayer}
+                  onAddLabels={onAddLabels}
+                  onRemoveLayer={onRemoveLayer}
+                  onRemoveLabels={onRemoveLabels}
+                  onToggleLayerDisabled={onToggleLayerDisabled}
+                  onToggleLabelsDisabled={onToggleLabelsDisabled}
+                />
+                {activeLabels && activePanel?.kind === "labels" ? (
+                  <LabelsPanel
+                    labels={activeLabels}
+                    onChange={(patch) =>
+                      onUpdateLabels(activePanel.labelsId, patch)
+                    }
+                  />
+                ) : activePanel?.kind === "shared" ? (
+                  <SharedMappingsPanel
+                    mappings={sharedMappings}
+                    onMap={(aes, col) => onMap(SHARED_MAPPINGS_KEY, aes, col)}
+                    onDrop={(aes, col, src) =>
+                      onDrop(SHARED_MAPPINGS_KEY, aes, col, src)
+                    }
+                  />
+                ) : activePanel?.kind === "layer" && panelLayer ? (
+                  <ChartPanel
+                    layer={panelLayer}
+                    resolvedDraw={
+                      resolvedDrawByLayerId[panelLayer.id] ?? null
+                    }
+                    openMappingAes={
+                      secondaryPanel?.kind === "mapping"
+                        ? secondaryPanel.aes
+                        : null
+                    }
+                    onMap={(aes, col) => onMap(panelLayer.id, aes, col)}
+                    onDrop={(aes, col, src) =>
+                      onDrop(panelLayer.id, aes, col, src)
+                    }
+                    onToggleMappingSettings={toggleMappingPanel}
+                    onOpenSettings={toggleSettingsPanel}
+                  />
+                ) : (
+                  <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
+                )}
+                {!hasMappings && (
+                  <div className={`absolute left-full top-0 z-10 ${tutorialWrapperCls}`}>
+                    <Tutorial step1Done={!!activeTable} />
+                  </div>
+                )}
+                </div>
+                {secondaryPanel?.kind === "settings" && panelLayer ? (
+                  <ChartTypePanel
+                    resolvedDraw={
+                      resolvedDrawByLayerId[panelLayer.id] ?? null
+                    }
+                    compatibleDraws={
+                      compatibleDrawsByLayerId[panelLayer.id] ?? []
+                    }
+                    settings={panelLayer.settings ?? {}}
+                    project={project}
+                    onChangeDraw={(d) => onChangeDraw(panelLayer.id, d)}
+                    onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
+                    onChangeProject={setProject}
+                    onRemove={
+                      layers.length > 1
+                        ? () => onRemoveLayer(panelLayer.id)
+                        : undefined
+                    }
+                    onClose={closeSecondaryPanel}
+                  />
+                ) : secondaryPanel?.kind === "mapping" && panelLayer ? (
+                  <MappingPanel
+                    aes={secondaryPanel.aes}
+                    settings={panelLayer.settings ?? {}}
+                    onChangeSettings={(s) =>
+                      onChangeSettings(panelLayer.id, s)
+                    }
+                    onClose={closeSecondaryPanel}
+                  />
+                ) : (
+                  <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
+                )}
+              </div>
             )}
           </div>
-        </div>
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-stone-200 bg-white">
-          <Group orientation="vertical" className="flex h-full w-full flex-col">
-            <Panel defaultSize={75} minSize={20} style={{ overflow: "hidden" }}>
-              <Viz
-                ref={vizRef}
-                empty={isEmpty}
-                hasError={errors.length > 0}
-                onShowProblems={() => setBottomTab("problems")}
-              />
-            </Panel>
-            <Separator className="!h-1 !flex-grow-0 !flex-shrink-0 bg-stone-200 transition-colors hover:bg-sky-400" />
-            <Panel defaultSize={25} minSize={5} style={{ overflow: "hidden" }}>
-              <BottomTabs
-                tab={bottomTab}
-                onTabChange={setBottomTab}
-                errorCount={errors.length}
-                warningCount={warnings.length}
-                problems={<ProblemsPanel errors={errors} warnings={warnings} />}
-                ggsql={<GGSQLPanel query={query} />}
-              />
-            </Panel>
-          </Group>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-app-chrome py-2 pr-2">
+          {isEmpty ? null : (
+            <Group
+              orientation="vertical"
+              className="flex h-full w-full flex-col"
+            >
+              <Panel
+                defaultSize={75}
+                minSize={20}
+                style={{ overflow: "hidden" }}
+              >
+                <div className="h-full overflow-hidden rounded-t-lg border border-stone-300 bg-white">
+                  <Viz
+                    ref={vizRef}
+                    hasError={errors.length > 0}
+                    onShowProblems={() => setBottomTab("problems")}
+                  />
+                </div>
+              </Panel>
+              <Separator className="!h-1 !flex-grow-0 !flex-shrink-0 bg-app-chrome transition-colors hover:bg-sky-400" />
+              <Panel
+                defaultSize={25}
+                minSize={5}
+                style={{ overflow: "hidden" }}
+              >
+                <div className="h-full overflow-hidden rounded-b-lg border border-stone-300 bg-app-chrome">
+                  <BottomTabs
+                    tab={bottomTab}
+                    onTabChange={setBottomTab}
+                    errorCount={errors.length}
+                    warningCount={warnings.length}
+                    problems={
+                      <ProblemsPanel errors={errors} warnings={warnings} />
+                    }
+                    ggsql={<GGSQLPanel query={query} />}
+                  />
+                </div>
+              </Panel>
+            </Group>
+          )}
         </section>
       </main>
     </div>

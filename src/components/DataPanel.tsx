@@ -57,8 +57,9 @@ export function DataPanel({
       .sort((a, b) => a.name.localeCompare(b.name));
 
     return (
-      <aside className="flex h-full w-[260px] shrink-0 flex-col bg-app-chrome">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-lg border-y border-l border-stone-300 bg-white">
+      <aside className="flex h-full w-[252px] shrink-0 flex-col bg-app-chrome">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-lg border border-stone-300 bg-white">
+            <BrandStrip />
             <div className="flex h-[52px] items-center gap-2 border-b border-stone-200 px-3">
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-[10px] uppercase tracking-wide text-stone-500">
@@ -105,8 +106,10 @@ export function DataPanel({
   }
 
   return (
-    <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-y-auto bg-app-chrome">
-      <div className="flex flex-1 flex-col rounded-l-lg border-y border-l border-stone-300 bg-white p-3">
+    <aside className="flex h-full w-[252px] shrink-0 flex-col overflow-y-auto bg-app-chrome">
+      <div className="flex flex-1 flex-col rounded-l-lg border border-stone-300 bg-white">
+        <BrandStrip />
+        <div className="flex flex-1 flex-col p-3">
           <h2 className="mb-2 font-mono text-[10px] uppercase tracking-wide text-stone-500">
             Choose data
           </h2>
@@ -174,8 +177,23 @@ export function DataPanel({
           >
             Palmer Penguins
           </button>
+        </div>
       </div>
     </aside>
+  );
+}
+
+function BrandStrip() {
+  return (
+    <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-stone-200 px-3 font-mono">
+      <span className="text-sm font-semibold text-stone-800">plotr</span>
+      <span className="text-[10px] tracking-wide text-stone-400">
+        A ggsql chart builder
+      </span>
+      <span className="rounded border border-amber-300 bg-amber-100 px-1 py-px text-[8px] font-bold uppercase tracking-wide text-amber-800">
+        Alpha
+      </span>
+    </div>
   );
 }
 

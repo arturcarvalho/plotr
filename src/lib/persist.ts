@@ -46,6 +46,7 @@ interface ShortLayer {
   d: string;
   m: Partial<Record<Aes, string>>;
   s?: ShortLayerSettings;
+  x?: true;
 }
 interface ShortLayerSettings {
   w?: number;
@@ -65,6 +66,8 @@ interface ShortLabels {
   c?: string;
   x?: string;
   y?: string;
+  // Note: `x` is already the X-axis label; `dx` carries the disabled flag.
+  dx?: true;
 }
 interface ShortProject {
   r?: number;
@@ -114,6 +117,7 @@ function encodeLayer(l: Layer): ShortLayer {
   };
   const settings = encodeLayerSettings(l.settings);
   if (settings) out.s = settings;
+  if (l.disabled === true) out.x = true;
   return out;
 }
 
@@ -124,6 +128,7 @@ function encodeLabels(l: LabelsLayer): ShortLabels {
   if (isMeaningful(l.caption)) out.c = l.caption;
   if (isMeaningful(l.x)) out.x = l.x;
   if (isMeaningful(l.y)) out.y = l.y;
+  if (l.disabled === true) out.dx = true;
   return out;
 }
 
@@ -185,6 +190,7 @@ function decodeLayer(raw: unknown): Layer | null {
   const out: Layer = { id, draw: r.d, mappings };
   const settings = decodeLayerSettings(r.s);
   if (settings) out.settings = settings;
+  if (r.x === true) out.disabled = true;
   return out;
 }
 
@@ -199,6 +205,7 @@ function decodeLabels(raw: unknown): LabelsLayer | null {
   if (typeof r.c === "string") out.caption = r.c;
   if (typeof r.x === "string") out.x = r.x;
   if (typeof r.y === "string") out.y = r.y;
+  if (r.dx === true) out.disabled = true;
   return out;
 }
 

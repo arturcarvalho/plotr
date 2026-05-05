@@ -79,6 +79,23 @@ describe("buildQuery without auto resolution (existing)", () => {
     expect(q).toContain("caption => 'cap2'");
   });
 
+  it("disabled labels layer is skipped during merge", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("point", { x: "bill_len", y: "bill_dep" })],
+      [
+        { title: "OldTitle", x: "ignored x" },
+        // simulate a LabelsLayer with disabled=true; cast to satisfy Labels[]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { title: "DisabledTitle", x: "should not appear", disabled: true } as any,
+      ],
+      COLS,
+    );
+    expect(q).toContain("title => 'OldTitle'");
+    expect(q).not.toContain("DisabledTitle");
+    expect(q).not.toContain("should not appear");
+  });
+
   it("empty labels array → no LABEL line", () => {
     const q = buildQuery(
       "ggsql:penguins",
@@ -161,6 +178,52 @@ describe("buildQuery resolves AUTO via column kinds", () => {
         dateCols,
       ),
     ).toBeNull();
+  });
+
+  it("disabled layer is skipped (no DRAW line)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L1",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          disabled: true,
+        },
+        layer("smooth", { x: "bill_len", y: "bill_dep" }, "L2"),
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toBeNull();
+    const lines = q!.split("\n");
+    const drawIdxs = lines
+      .map((l, i) => (l.startsWith("DRAW ") ? i : -1))
+      .filter((i) => i >= 0);
+    expect(drawIdxs).toHaveLength(1);
+    expect(lines[drawIdxs[0]]).toContain("DRAW smooth");
+  });
+
+  it("all layers disabled → no DRAW, returns null", () => {
+    expect(
+      buildQuery(
+        "ggsql:penguins",
+        [
+          {
+            id: "L1",
+            draw: "point",
+            mappings: { x: "bill_len", y: "bill_dep" },
+            disabled: true,
+          },
+        ],
+        [],
+        COLS,
+      ),
+    ).toBeNull();
+  });
+
+  it("empty layers array → null", () => {
+    expect(buildQuery("ggsql:penguins", [], [], COLS)).toBeNull();
   });
 
   it("mixed: one auto layer + one concrete layer emits both DRAW lines in order", () => {
