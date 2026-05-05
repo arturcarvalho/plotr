@@ -15,6 +15,8 @@ export interface LayerSettings {
   stroke?: string;
   opacity?: number;
   size?: number;
+  noFill?: boolean;
+  noStroke?: boolean;
 }
 
 export interface Layer {
@@ -28,6 +30,13 @@ export interface Labels {
   title?: string;
   subtitle?: string;
   caption?: string;
+  x?: string;
+  y?: string;
+}
+
+export interface LabelsLayer extends Labels {
+  id: string;
+  position: number;
 }
 
 export interface ProjectSettings {
@@ -45,9 +54,7 @@ export const DRAW_TYPES = [
   "smooth",
   "density",
   "violin",
-  "path",
   "ribbon",
-  "polygon",
   // `range` was named `errorbar` before ggsql 0.3.0.
   "range",
   "rule",
@@ -56,6 +63,29 @@ export const DRAW_TYPES = [
   "text",
   "tile",
 ] as const;
+
+export const CHART_LABELS: Record<string, string> = {
+  bar: "Bar chart",
+  point: "Scatter plot",
+  line: "Line chart",
+  area: "Area chart",
+  histogram: "Histogram",
+  boxplot: "Box plot",
+  smooth: "Trend line",
+  density: "Density plot",
+  violin: "Violin plot",
+  ribbon: "Ribbon",
+  range: "Error bar",
+  rule: "Reference line",
+  text: "Text labels",
+  tile: "Heatmap",
+};
+
+export const chartLabel = (draw: string): string =>
+  CHART_LABELS[draw] ?? draw;
+
+export const shortChartLabel = (draw: string): string =>
+  chartLabel(draw).replace(/ (chart|plot)$/, "");
 
 const escSql = (s: string) => s.replace(/'/g, "''");
 
@@ -72,9 +102,14 @@ const SETTING_ORDER = ["width", "position", "fill", "stroke", "opacity", "size"]
 
 const layerSettingClause = (s: LayerSettings | undefined): string => {
   if (!s) return "";
-  const entries = SETTING_ORDER.filter(
-    (k) => s[k] !== undefined && s[k] !== null,
-  ).map((k) => [k, s[k]] as [string, unknown]);
+  const entries: Array<[string, unknown]> = [];
+  for (const k of SETTING_ORDER) {
+    if (k === "fill" && s.noFill) continue;
+    if (k === "stroke" && s.noStroke) continue;
+    if (s[k] !== undefined && s[k] !== null) entries.push([k, s[k]]);
+  }
+  if (s.noFill) entries.push(["fill", null]);
+  if (s.noStroke) entries.push(["stroke", null]);
   return entries.length ? ` SETTING ${settingPairs(entries)}` : "";
 };
 
@@ -91,47 +126,77 @@ const projectClause = (p: ProjectSettings | undefined): string[] => {
 export function buildQuery(
   table: string,
   layers: Layer[],
-  labels: Labels,
+  labels: Labels[],
   columns: ColumnInfo[],
   project?: ProjectSettings,
+  sharedMappings?: Partial<Record<Aes, string>>,
 ): string | null {
+  const mergedLabels: Labels = {};
+  for (const l of labels) {
+    if (l.title) mergedLabels.title = l.title;
+    if (l.subtitle) mergedLabels.subtitle = l.subtitle;
+    if (l.caption) mergedLabels.caption = l.caption;
+    if (l.x) mergedLabels.x = l.x;
+    if (l.y) mergedLabels.y = l.y;
+  }
   if (!table) return null;
+
+  const sharedHasAesthetic = sharedMappings
+    ? AESTHETICS.some((a) => sharedMappings[a])
+    : false;
 
   const drawLines: string[] = [];
   for (const l of layers) {
-    const hasMappings = AESTHETICS.some((a) => l.mappings[a]);
-    if (!hasMappings) continue;
-    const draw = resolveDraw(l, columns);
+    const hasOwn = AESTHETICS.some((a) => l.mappings[a]);
+    if (!hasOwn && !sharedHasAesthetic) continue;
+    const draw = resolveDraw(l, columns, sharedMappings);
     if (!draw) continue;
-    const dataMaps = AESTHETICS.filter((a) => l.mappings[a]).map(
-      (a) => `${l.mappings[a]} AS ${a}`,
-    );
+    const dataMaps = AESTHETICS.filter((a) => {
+      if (!l.mappings[a]) return false;
+      if (a === "fill" && l.settings?.noFill) return false;
+      if (a === "stroke" && l.settings?.noStroke) return false;
+      return true;
+    }).map((a) => `${l.mappings[a]} AS ${a}`);
+    const mappingClause = dataMaps.length
+      ? ` MAPPING ${dataMaps.join(", ")}`
+      : "";
     drawLines.push(
-      `DRAW ${draw} MAPPING ${dataMaps.join(", ")}${layerSettingClause(l.settings)}`,
+      `DRAW ${draw}${mappingClause}${layerSettingClause(l.settings)}`,
     );
   }
 
   if (drawLines.length === 0) return null;
 
+  const sharedPairs = sharedMappings
+    ? AESTHETICS.filter((a) => sharedMappings[a]).map(
+        (a) => `${sharedMappings[a]} AS ${a}`,
+      )
+    : [];
+  const visualiseLine = sharedPairs.length
+    ? `VISUALISE ${sharedPairs.join(", ")}`
+    : `VISUALISE`;
+
   const facetLines: string[] = [];
-  const f = layers[0]?.mappings;
-  if (f?.facet_row && f?.facet_col) {
-    facetLines.push(`FACET ${f.facet_row} BY ${f.facet_col}`);
-  } else if (f?.facet_row) {
-    facetLines.push(`FACET ${f.facet_row}`);
-  } else if (f?.facet_col) {
-    facetLines.push(`FACET ${f.facet_col}`);
+  const fc = sharedMappings?.facet_col ?? layers[0]?.mappings.facet_col;
+  const fr = sharedMappings?.facet_row ?? layers[0]?.mappings.facet_row;
+  if (fr && fc) {
+    facetLines.push(`FACET ${fr} BY ${fc}`);
+  } else if (fr) {
+    facetLines.push(`FACET ${fr}`);
+  } else if (fc) {
+    facetLines.push(`FACET ${fc}`);
   }
 
   const projectLines = projectClause(project);
 
-  const labelEntries = (["title", "subtitle", "caption"] as const)
-    .filter((k) => labels[k])
-    .map((k) => `${k} => '${escSql(labels[k]!)}'`);
+  const labelEntries = (["title", "subtitle", "caption", "x", "y"] as const)
+    .filter((k) => mergedLabels[k])
+    .map((k) => `${k} => '${escSql(mergedLabels[k]!)}'`);
   const labelLine = labelEntries.length ? `LABEL ${labelEntries.join(", ")}` : "";
 
   return [
-    `VISUALISE FROM ${table}`,
+    `FROM ${table}`,
+    visualiseLine,
     ...drawLines,
     ...facetLines,
     ...projectLines,

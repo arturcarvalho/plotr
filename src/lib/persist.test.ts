@@ -4,8 +4,9 @@ import type { Layer } from "./buildQuery";
 
 const empty: Persisted = {
   layers: [],
-  labels: {},
+  labels: [],
   project: {},
+  sharedMappings: {},
   activeTable: null,
 };
 
@@ -23,63 +24,93 @@ const sample: Persisted = {
       mappings: { x: "bill_len", y: "bill_dep" },
     } satisfies Layer,
   ],
-  labels: { title: "Penguins" },
+  labels: [{ id: "Lab1", position: 2, title: "Penguins" }],
   project: { ratio: 1.5 },
+  sharedMappings: {},
   activeTable: "ggsql:penguins",
 };
 
+// Build a `s=…` hash carrying an arbitrary v=2 short-key payload — used to
+// assert deserialize tolerates / rejects malformed input. Mirrors the
+// gzip+base64url pipeline inside persist.ts.
+async function wrap(obj: object): Promise<string> {
+  const json = JSON.stringify({ v: 2, ...obj });
+  const stream = new Blob([json])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const b64 = btoa(bin)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  return `s=${b64}`;
+}
+
 describe("serialize / deserialize round-trip", () => {
-  it("empty state round-trips", () => {
-    const s = serialize(empty);
-    expect(deserialize(s)).toEqual(empty);
+  it("empty state round-trips", async () => {
+    const s = await serialize(empty);
+    expect(await deserialize(s)).toEqual(empty);
   });
 
-  it("rich state round-trips", () => {
-    const s = serialize(sample);
-    expect(deserialize(s)).toEqual(sample);
+  it("rich state round-trips", async () => {
+    const s = await serialize(sample);
+    expect(await deserialize(s)).toEqual(sample);
   });
 
-  it("layer order is preserved", () => {
-    const s = serialize(sample);
-    const r = deserialize(s);
+  it("layer order is preserved", async () => {
+    const s = await serialize(sample);
+    const r = await deserialize(s);
     expect(r?.layers.map((l) => l.id)).toEqual(["L1", "L2"]);
   });
 });
 
 describe("serialize strips defaults", () => {
-  it("drops empty labels", () => {
-    const s = serialize({
+  it("strips empty fields from labels layers", async () => {
+    const s = await serialize({
       layers: [],
-      labels: { title: undefined, subtitle: "", caption: undefined },
+      labels: [
+        {
+          id: "L",
+          position: 0,
+          title: undefined,
+          subtitle: "",
+          caption: undefined,
+        },
+      ],
       project: {},
+      sharedMappings: {},
       activeTable: null,
     });
-    const back = deserialize(s);
-    expect(back?.labels).toEqual({});
+    const back = await deserialize(s);
+    expect(back?.labels).toEqual([{ id: "L", position: 0 }]);
   });
 
-  it("drops project.clip when true (default)", () => {
-    const s = serialize({
+  it("drops project.clip when true (default)", async () => {
+    const s = await serialize({
       layers: [],
-      labels: {},
+      labels: [],
       project: { clip: true },
+      sharedMappings: {},
       activeTable: null,
     });
-    expect(deserialize(s)?.project).toEqual({});
+    expect((await deserialize(s))?.project).toEqual({});
   });
 
-  it("keeps project.clip when false", () => {
-    const s = serialize({
+  it("keeps project.clip when false", async () => {
+    const s = await serialize({
       layers: [],
-      labels: {},
+      labels: [],
       project: { clip: false },
+      sharedMappings: {},
       activeTable: null,
     });
-    expect(deserialize(s)?.project).toEqual({ clip: false });
+    expect((await deserialize(s))?.project).toEqual({ clip: false });
   });
 
-  it("drops empty layer.settings", () => {
-    const s = serialize({
+  it("drops empty layer.settings", async () => {
+    const s = await serialize({
       layers: [
         {
           id: "L",
@@ -88,116 +119,153 @@ describe("serialize strips defaults", () => {
           settings: {},
         } as Layer,
       ],
-      labels: {},
+      labels: [],
       project: {},
+      sharedMappings: {},
       activeTable: null,
     });
-    const back = deserialize(s);
+    const back = await deserialize(s);
     expect(back?.layers[0].settings).toBeUndefined();
   });
 });
 
-describe("activeTable", () => {
-  it("persists ggsql: built-in tables", () => {
-    const s = serialize({
+describe("sharedMappings persistence", () => {
+  it("round-trips sharedMappings", async () => {
+    const s = await serialize({
       layers: [],
-      labels: {},
+      labels: [],
       project: {},
-      activeTable: "ggsql:penguins",
-    });
-    expect(deserialize(s)?.activeTable).toBe("ggsql:penguins");
-  });
-
-  it("drops user CSV table names (no ggsql: prefix)", () => {
-    const s = serialize({
-      layers: [],
-      labels: {},
-      project: {},
-      activeTable: "my_csv",
-    });
-    expect(deserialize(s)?.activeTable).toBeNull();
-  });
-
-  it("treats null as null", () => {
-    const s = serialize({
-      layers: [],
-      labels: {},
-      project: {},
+      sharedMappings: { x: "bill_len", fill: "species" },
       activeTable: null,
     });
-    expect(deserialize(s)?.activeTable).toBeNull();
+    expect((await deserialize(s))?.sharedMappings).toEqual({
+      x: "bill_len",
+      fill: "species",
+    });
   });
 
-  it("missing activeTable defaults to null", () => {
-    const payload = `s=${encodeURIComponent(JSON.stringify({ v: 1 }))}`;
-    expect(deserialize(payload)?.activeTable).toBeNull();
+  it("missing sharedMappings defaults to {}", async () => {
+    const payload = await wrap({});
+    expect((await deserialize(payload))?.sharedMappings).toEqual({});
+  });
+
+  it("strips bad sharedMappings entries (unknown key, non-string value)", async () => {
+    const payload = await wrap({
+      S: { x: "bill_len", rogue: "x", y: 42 },
+    });
+    expect((await deserialize(payload))?.sharedMappings).toEqual({
+      x: "bill_len",
+    });
+  });
+});
+
+describe("activeTable", () => {
+  it("persists ggsql: built-in tables", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: "ggsql:penguins",
+    });
+    expect((await deserialize(s))?.activeTable).toBe("ggsql:penguins");
+  });
+
+  it("drops user CSV table names (no ggsql: prefix)", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: "my_csv",
+    });
+    expect((await deserialize(s))?.activeTable).toBeNull();
+  });
+
+  it("treats null as null", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.activeTable).toBeNull();
+  });
+
+  it("missing activeTable defaults to null", async () => {
+    const payload = await wrap({});
+    expect((await deserialize(payload))?.activeTable).toBeNull();
   });
 });
 
 describe("deserialize validates schema", () => {
-  const wrap = (obj: object) =>
-    `s=${encodeURIComponent(JSON.stringify({ v: 1, ...obj }))}`;
-
-  it("drops layer with unknown draw", () => {
+  it("drops layer with unknown draw", async () => {
     expect(
-      deserialize(
-        wrap({ layers: [{ id: "L", draw: "evil", mappings: { x: "a" } }] }),
+      (
+        await deserialize(
+          await wrap({ L: [{ i: "L", d: "evil", m: { x: "a" } }] }),
+        )
       )?.layers,
     ).toEqual([]);
   });
 
-  it("keeps layer with AUTO draw", () => {
+  it("keeps layer with AUTO draw", async () => {
     expect(
-      deserialize(
-        wrap({ layers: [{ id: "L", draw: "auto", mappings: { x: "a" } }] }),
+      (
+        await deserialize(
+          await wrap({ L: [{ i: "L", d: "auto", m: { x: "a" } }] }),
+        )
       )?.layers,
     ).toHaveLength(1);
   });
 
-  it("regenerates missing id", () => {
-    const r = deserialize(
-      wrap({ layers: [{ draw: "point", mappings: { x: "a" } }] }),
+  it("regenerates missing id", async () => {
+    const r = await deserialize(
+      await wrap({ L: [{ d: "point", m: { x: "a" } }] }),
     );
     expect(r?.layers).toHaveLength(1);
     expect(typeof r!.layers[0].id).toBe("string");
     expect(r!.layers[0].id.length).toBeGreaterThan(0);
   });
 
-  it("regenerates non-string id", () => {
-    const r = deserialize(
-      wrap({ layers: [{ id: 42, draw: "point", mappings: { x: "a" } }] }),
+  it("regenerates non-string id", async () => {
+    const r = await deserialize(
+      await wrap({ L: [{ i: 42, d: "point", m: { x: "a" } }] }),
     );
     expect(r?.layers).toHaveLength(1);
     expect(typeof r!.layers[0].id).toBe("string");
   });
 
-  it("drops layer with non-string mapping value", () => {
+  it("drops layer with non-string mapping value", async () => {
     expect(
-      deserialize(
-        wrap({ layers: [{ id: "L", draw: "point", mappings: { x: 42 } }] }),
+      (
+        await deserialize(
+          await wrap({ L: [{ i: "L", d: "point", m: { x: 42 } }] }),
+        )
       )?.layers,
     ).toEqual([]);
   });
 
-  it("drops layer with unknown mapping key", () => {
+  it("drops layer with unknown mapping key", async () => {
     expect(
-      deserialize(
-        wrap({
-          layers: [{ id: "L", draw: "point", mappings: { rogue: "a" } }],
-        }),
+      (
+        await deserialize(
+          await wrap({ L: [{ i: "L", d: "point", m: { rogue: "a" } }] }),
+        )
       )?.layers,
     ).toEqual([]);
   });
 
-  it("strips unknown settings keys but keeps layer", () => {
-    const r = deserialize(
-      wrap({
-        layers: [
+  it("strips unknown settings keys but keeps layer", async () => {
+    const r = await deserialize(
+      await wrap({
+        L: [
           {
-            id: "L",
-            draw: "point",
-            mappings: { x: "a" },
-            settings: { fill: "red", rogue: "x" },
+            i: "L",
+            d: "point",
+            m: { x: "a" },
+            s: { f: "red", rogue: "x" },
           },
         ],
       }),
@@ -206,15 +274,15 @@ describe("deserialize validates schema", () => {
     expect(r!.layers[0].settings).toEqual({ fill: "red" });
   });
 
-  it("strips settings entries with wrong type", () => {
-    const r = deserialize(
-      wrap({
-        layers: [
+  it("strips settings entries with wrong type", async () => {
+    const r = await deserialize(
+      await wrap({
+        L: [
           {
-            id: "L",
-            draw: "point",
-            mappings: { x: "a" },
-            settings: { fill: 42, opacity: "loud" },
+            i: "L",
+            d: "point",
+            m: { x: "a" },
+            s: { f: 42, o: "loud" },
           },
         ],
       }),
@@ -222,53 +290,109 @@ describe("deserialize validates schema", () => {
     expect(r?.layers[0].settings).toBeUndefined();
   });
 
-  it("strips bad project.ratio", () => {
+  it("round-trips noFill / noStroke booleans", async () => {
+    const r = await deserialize(
+      await wrap({
+        L: [
+          {
+            i: "L",
+            d: "point",
+            m: { x: "a" },
+            s: { nf: true, ns: true },
+          },
+        ],
+      }),
+    );
+    expect(r?.layers[0].settings).toEqual({
+      noFill: true,
+      noStroke: true,
+    });
+  });
+
+  it("strips non-boolean noFill", async () => {
+    const r = await deserialize(
+      await wrap({
+        L: [
+          {
+            i: "L",
+            d: "point",
+            m: { x: "a" },
+            s: { nf: "yes" },
+          },
+        ],
+      }),
+    );
+    expect(r?.layers[0].settings).toBeUndefined();
+  });
+
+  it("strips bad project.ratio", async () => {
     expect(
-      deserialize(
-        wrap({ layers: [], project: { ratio: "not-a-number" } }),
-      )?.project,
+      (await deserialize(await wrap({ P: { r: "not-a-number" } })))?.project,
     ).toEqual({});
   });
 
-  it("strips bad labels", () => {
+  it("strips bad labels", async () => {
     expect(
-      deserialize(
-        wrap({ layers: [], labels: { title: 42, subtitle: "ok" } }),
+      (
+        await deserialize(
+          await wrap({
+            B: [
+              { i: "L", p: 0, t: 42, st: "ok" },
+              "garbage",
+              { t: "no position" },
+            ],
+          }),
+        )
       )?.labels,
-    ).toEqual({ subtitle: "ok" });
+    ).toEqual([{ id: "L", position: 0, subtitle: "ok" }]);
+  });
+
+  it("non-array labels → []", async () => {
+    expect((await deserialize(await wrap({ B: { t: "x" } })))?.labels).toEqual(
+      [],
+    );
   });
 });
 
 describe("deserialize tolerance", () => {
-  it("empty string → null", () => {
-    expect(deserialize("")).toBeNull();
+  it("empty string → null", async () => {
+    expect(await deserialize("")).toBeNull();
   });
 
-  it("random garbage → null", () => {
-    expect(deserialize("not-json-at-all")).toBeNull();
-    expect(deserialize("s=%7Bbroken")).toBeNull();
+  it("random garbage → null", async () => {
+    expect(await deserialize("not-json-at-all")).toBeNull();
+    expect(await deserialize("s=%7Bbroken")).toBeNull();
   });
 
-  it("wrong version → null", () => {
-    const payload = `s=${encodeURIComponent(
-      JSON.stringify({ v: 999, layers: [], labels: {}, project: {} }),
-    )}`;
-    expect(deserialize(payload)).toBeNull();
+  it("wrong version → null", async () => {
+    const json = JSON.stringify({ v: 999 });
+    const stream = new Blob([json])
+      .stream()
+      .pipeThrough(new CompressionStream("gzip"));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(bin)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    expect(await deserialize(`s=${b64}`)).toBeNull();
   });
 
-  it("missing fields default to []/{}", () => {
-    const payload = `s=${encodeURIComponent(JSON.stringify({ v: 1 }))}`;
-    expect(deserialize(payload)).toEqual({
+  it("missing fields default to []/{}", async () => {
+    const payload = await wrap({});
+    expect(await deserialize(payload)).toEqual({
       layers: [],
-      labels: {},
+      labels: [],
       project: {},
+      sharedMappings: {},
       activeTable: null,
     });
   });
 
-  it("accepts both leading '#' and bare payload", () => {
-    const s = serialize(sample);
-    expect(deserialize("#" + s)).toEqual(sample);
-    expect(deserialize(s)).toEqual(sample);
+  it("accepts both leading '#' and bare payload", async () => {
+    const s = await serialize(sample);
+    expect(await deserialize("#" + s)).toEqual(sample);
+    expect(await deserialize(s)).toEqual(sample);
   });
 });

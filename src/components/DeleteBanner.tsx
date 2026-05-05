@@ -1,15 +1,9 @@
-import { useEffect, useState } from "react";
-import { dragSignal } from "../lib/dragSignal";
+interface Props {
+  show: boolean;
+}
 
-export function DeleteBanner() {
-  const [show, setShow] = useState(dragSignal.willDelete());
-
-  useEffect(() => {
-    return dragSignal.subscribe(() => setShow(dragSignal.willDelete()));
-  }, []);
-
+export function DeleteBanner({ show }: Props) {
   if (!show) return null;
-
   return (
     <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-center justify-center gap-2 rounded-md border border-dashed border-red-400 bg-red-50 px-3 py-1.5 font-mono text-xs text-red-700 shadow-sm">
       <svg

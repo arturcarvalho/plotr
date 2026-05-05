@@ -58,10 +58,10 @@ describe("compatibleDraws", () => {
     );
     expect(r).toHaveLength(5);
   });
-  it("continuous,continuous has 7 draws including point", () => {
+  it("continuous,continuous has 6 draws including point", () => {
     const r = compatibleDraws("continuous", "continuous");
     expect(r).toContain("point");
-    expect(r).toHaveLength(7);
+    expect(r).toHaveLength(6);
   });
   it("empty,empty returns []", () => {
     expect(compatibleDraws("empty", "empty")).toEqual([]);
@@ -122,5 +122,17 @@ describe("resolveDraw", () => {
     expect(resolveDraw(layer(AUTO, "born_at", "bill_len"), COLUMNS)).toBe(
       "line",
     );
+  });
+
+  it("auto + no own mappings + shared x,y → resolves from shared", () => {
+    expect(
+      resolveDraw(layer(AUTO), COLUMNS, { x: "bill_len", y: "bill_len" }),
+    ).toBe("point");
+  });
+
+  it("auto + own x overrides shared x", () => {
+    expect(
+      resolveDraw(layer(AUTO, "species"), COLUMNS, { x: "bill_len" }),
+    ).toBe("bar");
   });
 });

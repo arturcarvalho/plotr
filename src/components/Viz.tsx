@@ -2,21 +2,49 @@ import { forwardRef } from "react";
 
 interface Props {
   empty: boolean;
+  hasError: boolean;
+  onShowProblems: () => void;
 }
 
-export const Viz = forwardRef<HTMLDivElement, Props>(({ empty }, ref) => {
-  return (
-    <div className="relative h-full w-full">
-      <div
-        ref={ref}
-        className="h-full w-full overflow-hidden p-4"
-      />
-      {empty && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-slate-500">
-          Drag variables onto the build pane to render a chart.
-        </div>
-      )}
-    </div>
-  );
-});
+export const Viz = forwardRef<HTMLDivElement, Props>(
+  ({ empty, hasError, onShowProblems }, ref) => {
+    return (
+      <div className="relative h-full w-full overflow-hidden">
+        <div ref={ref} className="absolute inset-0 overflow-hidden p-4" />
+        {empty && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-stone-500">
+            Drag variables to the X, Y, etc. to render a chart.
+          </div>
+        )}
+        {hasError && (
+          <div className="absolute left-1/2 top-3 z-10 flex -transtone-x-1/2 items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 font-mono text-xs text-red-800 shadow-sm">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="13" />
+              <line x1="12" y1="16" x2="12" y2="16" />
+            </svg>
+            <span>Chart error</span>
+            <button
+              type="button"
+              onClick={onShowProblems}
+              className="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+            >
+              View
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  },
+);
 Viz.displayName = "Viz";

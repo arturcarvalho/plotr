@@ -1,5 +1,7 @@
 # plotr
 
+> **Alpha** — work in progress; expect breaking changes.
+
 Browser ggsql playground. Paste ggsql in the editor on the left, get a chart on the right.
 
 ## Features
@@ -7,15 +9,18 @@ Browser ggsql playground. Paste ggsql in the editor on the left, get a chart on 
 - **Sidebar (left).** Drag or browse a CSV — or click "Palmer Penguins" for the built-in dataset.
 - **Variable list.** Once a file is loaded, the sidebar lists columns grouped by type. Non-numeric on top (`T` string, `✓` bool, `📅` date), numeric (`#`) at the bottom. Each row is **draggable** onto the build pane.
 - **Change file** button at the sidebar footer resets to the empty state.
-- **Build pane (middle).** Composes a ggsql query layer-by-layer.
-  - Each layer (DRAW) is a card with a chart-type select (point, bar, histogram, line, smooth, ...) and dropzones for `X` / `Y` / `Fill` / `Stroke` / `Opacity` / `Size` / `Panels` (Top + Right axes → FACET).
-  - Drop a sidebar variable onto a dropzone → `<col> AS <aes>` is added to the layer's MAPPING. Click `×` on a chip to clear.
-  - Only one card is expanded at a time; click the header to toggle.
-  - `+ Add chart` adds a new layer; the `×` in an expanded header removes it.
-  - `Labels` is pinned at the bottom — expand to set Title, Subtitle (emitted as `LABEL title => '...', ...`).
-- **Code panel (between build pane and chart).** Shows the generated ggsql in real time. **Copy** button writes the current query to the clipboard.
+- **Build pane (middle).** Photoshop-style narrow icon column.
+  - Each chart layer is a small button showing the resolved chart-type icon (▶ play icon when AUTO with no mappings). Multiple `T` labels layers can coexist — each holds its own title/subtitle/caption + X/Y axis labels; the generated `LABEL` clause merges them last-wins per field.
+  - A stacked-layers icon at the top opens **Shared variables** — variable mappings applied to every layer.
+  - Click any icon to open its detail panel on the right: chart-type picker grid + dropzones for `X` / `Y` / `Fill` / `Stroke` / `Opacity` / `Size` / `Panels` (`rows` / `columns` → FACET), bar Width/Position when applicable, Plot settings (clip), and a Remove-layer button.
+  - Drop a sidebar variable onto a dropzone → `<col> AS <aes>`. Drag chip away or click the cog → per-aesthetic settings panel.
+  - `+` at the bottom opens a `Chart` / `Labels` dropdown; new items append just above `+` and are auto-selected.
+  - `×` floats on hover/selected to remove an icon.
+  - Reset: clicking `Change file` in the sidebar clears the data and the entire chart config.
+  - Only one side panel (Shared mappings / a layer / a mapping / Labels) is visible at a time.
+- **GGSQL tab (bottom).** Shows the generated ggsql in real time. **Copy** button writes the current query to the clipboard.
 - **Chart pane (right).** Live-renders the generated ggsql via `vega-embed` (SVG renderer, export-only menu) against the sidebar's active table.
-- **Errors / warnings (bottom).** Chart errors and Vega warnings appear here.
+- **Bottom pane.** Tabs: **Problems** (chart errors + Vega warnings) · **GGSQL** (generated query). The Problems tab shows two pill badges — red `⨯ N` for errors, amber `⚠ N` for warnings (each hidden when zero). The error pill briefly pulses when a new error appears; the tab does not auto-switch. A red "Chart error — View" banner overlays the chart pane when there's an error; clicking **View** switches the bottom tab to Problems. Drag the top edge to resize.
 - **Built-in datasets** (`ggsql:penguins`, `ggsql:airquality`) registered at boot.
 
 ## Stack
@@ -75,12 +80,13 @@ src/
   index.css             tailwind + table styles
   components/
     Sidebar.tsx         left file picker / variable list (draggable)
-    BuildPane.tsx       middle: layer cards + add-chart + labels
+    BuildPane.tsx       middle: narrow icon column (layers + labels + shared + add)
     LayerCard.tsx       one DRAW layer
-    ChartPanel.tsx      draw-type picker + plot-level settings
+    LayerPanel.tsx      per-layer side panel: draw-type picker + mappings + layer/plot settings
     MappingPanel.tsx    per-aesthetic settings (colour/opacity/size)
     LabelsCard.tsx      title/subtitle/caption toggle button
     LabelsPanel.tsx     labels editor side panel
+    AddMenu.tsx         "+ Add" dropdown (Chart / Labels)
     Dropzone.tsx        single aesthetic drop target
     DeleteBanner.tsx    "release to remove" banner during drag
     CodePanel.tsx       generated-ggsql viewer + copy button

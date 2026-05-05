@@ -36,10 +36,10 @@ export function MappingPanel({
         : cap(aes);
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col bg-slate-50 p-1">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
-        <header className="flex items-center justify-between border-b border-slate-200 px-3 py-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-slate-500">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col bg-app-chrome">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-r-lg border-y border-r border-stone-300 bg-white">
+        <header className="flex items-center justify-between border-b border-stone-200 px-3 py-1.5">
+          <span className="font-mono text-[10px] uppercase tracking-wide text-stone-500">
             {aesLabel}
           </span>
           <button
@@ -47,7 +47,7 @@ export function MappingPanel({
             onClick={onClose}
             aria-label={`Close ${aesLabel}`}
             title="Close"
-            className="rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="rounded p-0.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800"
           >
             <svg
               width="13"
@@ -68,20 +68,42 @@ export function MappingPanel({
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
           {aes === "fill" && (
-            <ColorField
-              value={settings.fill ?? null}
-              onChange={(v) =>
-                onChangeSettings({ ...settings, fill: v ?? undefined })
-              }
-            />
+            <>
+              <ToggleField
+                label="No fill"
+                checked={settings.noFill ?? false}
+                onChange={(v) =>
+                  onChangeSettings({ ...settings, noFill: v || undefined })
+                }
+              />
+              {!settings.noFill && (
+                <ColorField
+                  value={settings.fill ?? null}
+                  onChange={(v) =>
+                    onChangeSettings({ ...settings, fill: v ?? undefined })
+                  }
+                />
+              )}
+            </>
           )}
           {aes === "stroke" && (
-            <ColorField
-              value={settings.stroke ?? null}
-              onChange={(v) =>
-                onChangeSettings({ ...settings, stroke: v ?? undefined })
-              }
-            />
+            <>
+              <ToggleField
+                label="No stroke"
+                checked={settings.noStroke ?? false}
+                onChange={(v) =>
+                  onChangeSettings({ ...settings, noStroke: v || undefined })
+                }
+              />
+              {!settings.noStroke && (
+                <ColorField
+                  value={settings.stroke ?? null}
+                  onChange={(v) =>
+                    onChangeSettings({ ...settings, stroke: v ?? undefined })
+                  }
+                />
+              )}
+            </>
           )}
           {aes === "opacity" && (
             <NumberSlider
@@ -111,13 +133,34 @@ export function MappingPanel({
             aes === "y" ||
             aes === "facet_col" ||
             aes === "facet_row") && (
-            <p className="font-mono text-xs text-slate-500">
+            <p className="font-mono text-xs text-stone-500">
               No settings yet for this aesthetic.
             </p>
           )}
         </div>
       </div>
     </aside>
+  );
+}
+
+function ToggleField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 font-mono text-xs text-stone-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
   );
 }
 
@@ -130,9 +173,9 @@ function ColorField({
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between font-mono text-xs text-slate-700">
+      <div className="flex items-center justify-between font-mono text-xs text-stone-700">
         <span>Fixed colour</span>
-        <span className="font-mono text-[10px] text-slate-500">
+        <span className="font-mono text-[10px] text-stone-500">
           {value ?? "default"}
         </span>
       </div>
@@ -146,7 +189,7 @@ function ColorField({
             title={c}
             className={[
               "h-7 w-full rounded border-2 transition-shadow",
-              value === c ? "border-slate-800" : "border-slate-200",
+              value === c ? "border-stone-800" : "border-stone-200",
             ].join(" ")}
             style={{ background: c }}
           />
@@ -156,7 +199,7 @@ function ColorField({
         <button
           type="button"
           onClick={() => onChange(null)}
-          className="w-full rounded border border-slate-300 bg-white px-2 py-1 font-mono text-[11px] text-slate-600 hover:bg-slate-100"
+          className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-[11px] text-stone-600 hover:bg-stone-100"
         >
           Clear
         </button>
@@ -182,9 +225,9 @@ function NumberSlider({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 flex items-center justify-between font-mono text-xs text-slate-700">
+      <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
         <span>{label}</span>
-        <span className="text-[10px] text-slate-500">
+        <span className="text-[10px] text-stone-500">
           {value === null ? "default" : value}
         </span>
       </span>
@@ -204,7 +247,7 @@ function NumberSlider({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
             title="Reset to default"
           >
             ×

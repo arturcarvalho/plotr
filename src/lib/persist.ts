@@ -4,7 +4,7 @@ import {
   DRAW_TYPES,
   FACETS,
   type Aes,
-  type Labels,
+  type LabelsLayer,
   type Layer,
   type LayerSettings,
   type ProjectSettings,
@@ -12,15 +12,15 @@ import {
 
 export interface Persisted {
   layers: Layer[];
-  labels: Labels;
+  labels: LabelsLayer[];
   project: ProjectSettings;
+  sharedMappings: Partial<Record<Aes, string>>;
   /** Built-in (ggsql:*) table name only. User CSV tables are not persisted. */
   activeTable: string | null;
 }
 
 const BUILTIN_PREFIX = "ggsql:";
-
-const VERSION = 1;
+const VERSION = 2;
 
 const VALID_DRAWS: ReadonlySet<string> = new Set<string>([
   ...DRAW_TYPES,
@@ -30,161 +30,263 @@ const VALID_AES: ReadonlySet<string> = new Set<string>([
   ...AESTHETICS,
   ...FACETS,
 ]);
-const SETTING_NUMERIC: ReadonlySet<string> = new Set([
-  "width",
-  "opacity",
-  "size",
-]);
-const SETTING_STRING: ReadonlySet<string> = new Set([
-  "position",
-  "fill",
-  "stroke",
-]);
 
 const newId = () => Math.random().toString(36).slice(2, 9);
-
 const isNonEmptyString = (v: unknown): v is string =>
   typeof v === "string" && v.length > 0;
-
 const isMeaningful = (v: unknown): boolean =>
   v !== undefined && v !== null && v !== "";
 
-const cleanLabels = (l: Labels): Labels => {
-  const out: Labels = {};
-  if (isMeaningful(l.title)) out.title = l.title;
-  if (isMeaningful(l.subtitle)) out.subtitle = l.subtitle;
-  if (isMeaningful(l.caption)) out.caption = l.caption;
-  return out;
-};
+// ────────────────────────────────────────────────────────────────────────────
+// Encoders (long → short, drop empty)
+// ────────────────────────────────────────────────────────────────────────────
 
-const cleanProject = (p: ProjectSettings): ProjectSettings => {
-  const out: ProjectSettings = {};
-  if (typeof p.ratio === "number" && !Number.isNaN(p.ratio)) {
-    out.ratio = p.ratio;
-  }
-  if (p.clip === false) out.clip = false;
-  return out;
-};
-
-const cleanSettings = (
-  s: LayerSettings | undefined,
-): LayerSettings | undefined => {
-  if (!s) return undefined;
-  const out: LayerSettings = {};
-  for (const [k, v] of Object.entries(s) as Array<
-    [keyof LayerSettings, unknown]
-  >) {
-    if (v !== undefined && v !== null) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (out as any)[k] = v;
-    }
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
-};
-
-const cleanLayer = (l: Layer): Layer => {
-  const out: Layer = {
-    id: l.id,
-    draw: l.draw,
-    mappings: { ...l.mappings },
-  };
-  const settings = cleanSettings(l.settings);
-  if (settings) out.settings = settings;
-  return out;
-};
-
-export function serialize(p: Persisted): string {
-  type Payload = {
-    v: number;
-    layers?: Layer[];
-    labels?: Labels;
-    project?: ProjectSettings;
-    table?: string;
-  };
-  const payload: Payload = { v: VERSION };
-  if (p.layers.length > 0) payload.layers = p.layers.map(cleanLayer);
-  const labels = cleanLabels(p.labels);
-  if (Object.keys(labels).length > 0) payload.labels = labels;
-  const project = cleanProject(p.project);
-  if (Object.keys(project).length > 0) payload.project = project;
-  if (
-    typeof p.activeTable === "string" &&
-    p.activeTable.startsWith(BUILTIN_PREFIX)
-  ) {
-    payload.table = p.activeTable;
-  }
-  return `s=${encodeURIComponent(JSON.stringify(payload))}`;
+interface ShortLayer {
+  i: string;
+  d: string;
+  m: Partial<Record<Aes, string>>;
+  s?: ShortLayerSettings;
+}
+interface ShortLayerSettings {
+  w?: number;
+  pos?: string;
+  f?: string;
+  k?: string;
+  o?: number;
+  z?: number;
+  nf?: true;
+  ns?: true;
+}
+interface ShortLabels {
+  i: string;
+  p: number;
+  t?: string;
+  st?: string;
+  c?: string;
+  x?: string;
+  y?: string;
+}
+interface ShortProject {
+  r?: number;
+  c?: false;
+}
+interface Payload {
+  v: number;
+  L?: ShortLayer[];
+  B?: ShortLabels[];
+  P?: ShortProject;
+  S?: Partial<Record<Aes, string>>;
+  t?: string;
 }
 
-function validateLayer(raw: unknown): Layer | null {
+function encodeMappings(
+  m: Partial<Record<Aes, string>>,
+): Partial<Record<Aes, string>> {
+  const out: Partial<Record<Aes, string>> = {};
+  for (const k of [...AESTHETICS, ...FACETS]) {
+    const v = m[k as Aes];
+    if (typeof v === "string" && v.length > 0) out[k as Aes] = v;
+  }
+  return out;
+}
+
+function encodeLayerSettings(
+  s: LayerSettings | undefined,
+): ShortLayerSettings | undefined {
+  if (!s) return undefined;
+  const out: ShortLayerSettings = {};
+  if (typeof s.width === "number" && !Number.isNaN(s.width)) out.w = s.width;
+  if (typeof s.position === "string") out.pos = s.position;
+  if (isNonEmptyString(s.fill)) out.f = s.fill;
+  if (isNonEmptyString(s.stroke)) out.k = s.stroke;
+  if (typeof s.opacity === "number" && !Number.isNaN(s.opacity)) out.o = s.opacity;
+  if (typeof s.size === "number" && !Number.isNaN(s.size)) out.z = s.size;
+  if (s.noFill === true) out.nf = true;
+  if (s.noStroke === true) out.ns = true;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function encodeLayer(l: Layer): ShortLayer {
+  const out: ShortLayer = {
+    i: l.id,
+    d: l.draw,
+    m: encodeMappings(l.mappings),
+  };
+  const settings = encodeLayerSettings(l.settings);
+  if (settings) out.s = settings;
+  return out;
+}
+
+function encodeLabels(l: LabelsLayer): ShortLabels {
+  const out: ShortLabels = { i: l.id, p: l.position };
+  if (isMeaningful(l.title)) out.t = l.title;
+  if (isMeaningful(l.subtitle)) out.st = l.subtitle;
+  if (isMeaningful(l.caption)) out.c = l.caption;
+  if (isMeaningful(l.x)) out.x = l.x;
+  if (isMeaningful(l.y)) out.y = l.y;
+  return out;
+}
+
+function encodeProject(p: ProjectSettings): ShortProject {
+  const out: ShortProject = {};
+  if (typeof p.ratio === "number" && !Number.isNaN(p.ratio)) out.r = p.ratio;
+  if (p.clip === false) out.c = false;
+  return out;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Decoders (short → long, validate)
+// ────────────────────────────────────────────────────────────────────────────
+
+function decodeMappings(raw: unknown): Partial<Record<Aes, string>> {
+  if (!raw || typeof raw !== "object") return {};
+  const r = raw as Record<string, unknown>;
+  const out: Partial<Record<Aes, string>> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (!VALID_AES.has(k)) continue;
+    if (!isNonEmptyString(v)) continue;
+    out[k as Aes] = v;
+  }
+  return out;
+}
+
+function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: LayerSettings = {};
+  if (typeof r.w === "number" && !Number.isNaN(r.w)) out.width = r.w;
+  if (typeof r.pos === "string") {
+    out.position = r.pos as LayerSettings["position"];
+  }
+  if (typeof r.f === "string") out.fill = r.f;
+  if (typeof r.k === "string") out.stroke = r.k;
+  if (typeof r.o === "number" && !Number.isNaN(r.o)) out.opacity = r.o;
+  if (typeof r.z === "number" && !Number.isNaN(r.z)) out.size = r.z;
+  if (r.nf === true) out.noFill = true;
+  if (r.ns === true) out.noStroke = true;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function decodeLayer(raw: unknown): Layer | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
 
-  if (typeof r.draw !== "string" || !VALID_DRAWS.has(r.draw)) return null;
+  if (typeof r.d !== "string" || !VALID_DRAWS.has(r.d)) return null;
 
-  if (!r.mappings || typeof r.mappings !== "object") return null;
+  if (!r.m || typeof r.m !== "object") return null;
   const mappings: Layer["mappings"] = {};
-  for (const [k, v] of Object.entries(r.mappings as Record<string, unknown>)) {
+  for (const [k, v] of Object.entries(r.m as Record<string, unknown>)) {
     if (!VALID_AES.has(k)) return null;
     if (!isNonEmptyString(v)) return null;
     mappings[k as Aes] = v;
   }
 
-  const id = isNonEmptyString(r.id) ? r.id : newId();
-  const out: Layer = { id, draw: r.draw, mappings };
-
-  if (r.settings && typeof r.settings === "object") {
-    const settings: LayerSettings = {};
-    for (const [k, v] of Object.entries(
-      r.settings as Record<string, unknown>,
-    )) {
-      if (SETTING_STRING.has(k) && typeof v === "string") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (settings as any)[k] = v;
-      } else if (
-        SETTING_NUMERIC.has(k) &&
-        typeof v === "number" &&
-        !Number.isNaN(v)
-      ) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (settings as any)[k] = v;
-      }
-    }
-    if (Object.keys(settings).length > 0) out.settings = settings;
-  }
-
+  const id = isNonEmptyString(r.i) ? r.i : newId();
+  const out: Layer = { id, draw: r.d, mappings };
+  const settings = decodeLayerSettings(r.s);
+  if (settings) out.settings = settings;
   return out;
 }
 
-function validateLabels(raw: unknown): Labels {
-  if (!raw || typeof raw !== "object") return {};
+function decodeLabels(raw: unknown): LabelsLayer | null {
+  if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  const out: Labels = {};
-  if (typeof r.title === "string") out.title = r.title;
-  if (typeof r.subtitle === "string") out.subtitle = r.subtitle;
-  if (typeof r.caption === "string") out.caption = r.caption;
+  if (typeof r.p !== "number" || !Number.isInteger(r.p)) return null;
+  const id = isNonEmptyString(r.i) ? r.i : newId();
+  const out: LabelsLayer = { id, position: Math.max(0, r.p) };
+  if (typeof r.t === "string") out.title = r.t;
+  if (typeof r.st === "string") out.subtitle = r.st;
+  if (typeof r.c === "string") out.caption = r.c;
+  if (typeof r.x === "string") out.x = r.x;
+  if (typeof r.y === "string") out.y = r.y;
   return out;
 }
 
-function validateProject(raw: unknown): ProjectSettings {
+function decodeProject(raw: unknown): ProjectSettings {
   if (!raw || typeof raw !== "object") return {};
   const r = raw as Record<string, unknown>;
   const out: ProjectSettings = {};
-  if (typeof r.ratio === "number" && !Number.isNaN(r.ratio)) {
-    out.ratio = r.ratio;
-  }
-  if (typeof r.clip === "boolean") out.clip = r.clip;
+  if (typeof r.r === "number" && !Number.isNaN(r.r)) out.ratio = r.r;
+  if (typeof r.c === "boolean") out.clip = r.c;
   return out;
 }
 
-export function deserialize(hash: string): Persisted | null {
+// ────────────────────────────────────────────────────────────────────────────
+// Compression + URL-safe base64
+// ────────────────────────────────────────────────────────────────────────────
+
+function bytesToBinaryString(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return s;
+}
+
+function binaryStringToBytes(bin: string): Uint8Array {
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  return btoa(bytesToBinaryString(bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function base64UrlDecode(str: string): Uint8Array {
+  const padded =
+    str.replace(/-/g, "+").replace(/_/g, "/") +
+    "===".slice((str.length + 3) % 4);
+  return binaryStringToBytes(atob(padded));
+}
+
+async function gzipString(s: string): Promise<Uint8Array> {
+  const stream = new Blob([s])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function ungzipString(bytes: Uint8Array): Promise<string> {
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return new Response(stream).text();
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Public API
+// ────────────────────────────────────────────────────────────────────────────
+
+export async function serialize(p: Persisted): Promise<string> {
+  const payload: Payload = { v: VERSION };
+  if (p.layers.length > 0) payload.L = p.layers.map(encodeLayer);
+  const labels = p.labels.map(encodeLabels);
+  if (labels.length > 0) payload.B = labels;
+  const project = encodeProject(p.project);
+  if (Object.keys(project).length > 0) payload.P = project;
+  const shared = encodeMappings(p.sharedMappings);
+  if (Object.keys(shared).length > 0) payload.S = shared;
+  if (
+    typeof p.activeTable === "string" &&
+    p.activeTable.startsWith(BUILTIN_PREFIX)
+  ) {
+    payload.t = p.activeTable;
+  }
+  const json = JSON.stringify(payload);
+  const gz = await gzipString(json);
+  return `s=${base64UrlEncode(gz)}`;
+}
+
+export async function deserialize(hash: string): Promise<Persisted | null> {
   if (!hash) return null;
   const h = hash.startsWith("#") ? hash.slice(1) : hash;
   const match = h.match(/(?:^|&)s=([^&]+)/);
   if (!match) return null;
   let json: string;
   try {
-    json = decodeURIComponent(match[1]);
+    json = await ungzipString(base64UrlDecode(match[1]));
   } catch {
     return null;
   }
@@ -202,23 +304,30 @@ export function deserialize(hash: string): Persisted | null {
     return null;
   }
   const obj = parsed as {
-    layers?: unknown;
-    labels?: unknown;
-    project?: unknown;
-    table?: unknown;
+    L?: unknown;
+    B?: unknown;
+    P?: unknown;
+    S?: unknown;
+    t?: unknown;
   };
-  const layers = Array.isArray(obj.layers)
-    ? obj.layers
-        .map(validateLayer)
+  const layers = Array.isArray(obj.L)
+    ? obj.L
+        .map(decodeLayer)
         .filter((l): l is Layer => l !== null)
+    : [];
+  const labels = Array.isArray(obj.B)
+    ? obj.B
+        .map(decodeLabels)
+        .filter((l): l is LabelsLayer => l !== null)
     : [];
   return {
     layers,
-    labels: validateLabels(obj.labels),
-    project: validateProject(obj.project),
+    labels,
+    project: decodeProject(obj.P),
+    sharedMappings: decodeMappings(obj.S),
     activeTable:
-      typeof obj.table === "string" && obj.table.startsWith(BUILTIN_PREFIX)
-        ? obj.table
+      typeof obj.t === "string" && obj.t.startsWith(BUILTIN_PREFIX)
+        ? obj.t
         : null,
   };
 }

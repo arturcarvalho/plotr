@@ -31,16 +31,7 @@ function sanitiseTableName(filename: string): string {
     .toLowerCase();
 }
 
-function Brand() {
-  return (
-    <div className="px-3 py-2 font-mono text-[10px] leading-tight tracking-wide text-slate-400">
-      <div className="text-sm font-semibold text-slate-800">plotr</div>
-      <div>A drag-and-drop ggsql chart builder</div>
-    </div>
-  );
-}
-
-export function Sidebar({
+export function DataPanel({
   ready,
   activeTable,
   columns,
@@ -66,17 +57,15 @@ export function Sidebar({
       .sort((a, b) => a.name.localeCompare(b.name));
 
     return (
-      <aside className="flex h-full w-[260px] shrink-0 flex-col bg-slate-50">
-        <Brand />
-        <div className="flex min-h-0 flex-1 flex-col p-1 pt-0">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
-            <div className="flex items-start gap-2 border-b border-slate-200 px-3 py-2">
+      <aside className="flex h-full w-[260px] shrink-0 flex-col bg-app-chrome">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-lg border-y border-l border-stone-300 bg-white">
+            <div className="flex h-[52px] items-center gap-2 border-b border-stone-200 px-3">
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-[10px] uppercase tracking-wide text-slate-500">
-                  Active table
+                <div className="font-mono text-[10px] uppercase tracking-wide text-stone-500">
+                  Table
                 </div>
                 <div
-                  className="truncate font-mono text-sm font-semibold text-slate-800"
+                  className="truncate font-mono text-sm font-semibold text-stone-800"
                   title={activeTable}
                 >
                   {activeTable}
@@ -87,7 +76,7 @@ export function Sidebar({
                 onClick={onChangeFile}
                 title="Change file"
                 aria-label="Change file"
-                className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+                className="shrink-0 rounded p-3 text-stone-500 hover:bg-stone-200 hover:text-stone-800"
               >
                 <svg
                   width="14"
@@ -108,20 +97,17 @@ export function Sidebar({
 
             <div className="min-h-0 flex-1 overflow-y-auto py-2">
               <Section title="Variables" rows={nonNumeric} />
-              <Section title="Numeric" rows={numeric} />
+              <Section divider={nonNumeric.length > 0} rows={numeric} />
             </div>
-          </div>
         </div>
       </aside>
     );
   }
 
   return (
-    <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-y-auto bg-slate-50">
-      <Brand />
-      <div className="flex flex-1 flex-col p-1 pt-0">
-        <div className="flex flex-1 flex-col rounded-lg border border-slate-300 bg-white p-3 shadow-sm">
-          <h2 className="mb-2 font-mono text-[10px] uppercase tracking-wide text-slate-500">
+    <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-y-auto bg-app-chrome">
+      <div className="flex flex-1 flex-col rounded-l-lg border-y border-l border-stone-300 bg-white p-3">
+          <h2 className="mb-2 font-mono text-[10px] uppercase tracking-wide text-stone-500">
             Choose data
           </h2>
 
@@ -141,7 +127,7 @@ export function Sidebar({
               "mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-3 py-3 text-center text-xs transition-colors",
               dragOver
                 ? "border-sky-400 bg-sky-50 text-sky-700"
-                : "border-slate-300 bg-slate-50 text-slate-500 hover:border-slate-400 hover:bg-slate-100",
+                : "border-stone-300 bg-stone-100 text-stone-500 hover:border-stone-400 hover:bg-stone-100",
             ].join(" ")}
           >
             <svg
@@ -153,7 +139,7 @@ export function Sidebar({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="text-slate-400"
+              className="text-stone-400"
               aria-hidden
             >
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -161,8 +147,8 @@ export function Sidebar({
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
             <span>
-              <span className="font-medium text-slate-700">Drop CSV</span>{" "}
-              <span className="text-slate-400">or browse</span>
+              <span className="font-medium text-stone-700">Drop CSV</span>{" "}
+              <span className="text-stone-400">or browse</span>
             </span>
             <input
               ref={fileInputRef}
@@ -177,30 +163,41 @@ export function Sidebar({
             />
           </label>
 
-          <div className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-slate-400">
+          <div className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-stone-400">
             or use built-in
           </div>
           <button
             type="button"
             disabled={!ready}
             onClick={onLoadPenguins}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-stone-300 bg-white px-3 py-1.5 font-mono text-xs text-stone-700 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Palmer Penguins
           </button>
-        </div>
       </div>
     </aside>
   );
 }
 
-function Section({ title, rows }: { title: string; rows: ColumnInfo[] }) {
+function Section({
+  title,
+  divider,
+  rows,
+}: {
+  title?: string;
+  divider?: boolean;
+  rows: ColumnInfo[];
+}) {
   if (rows.length === 0) return null;
   return (
     <div className="mb-2">
-      <div className="px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-slate-500">
-        {title}
-      </div>
+      {title ? (
+        <div className="px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-stone-500">
+          {title}
+        </div>
+      ) : divider ? (
+        <div className="my-1 border-t border-stone-200" />
+      ) : null}
       <ul>
         {rows.map((col) => (
           <li
@@ -210,7 +207,7 @@ function Section({ title, rows }: { title: string; rows: ColumnInfo[] }) {
               e.dataTransfer.setData("text/plain", col.name);
               e.dataTransfer.effectAllowed = "copy";
             }}
-            className="flex cursor-grab items-center gap-2 px-3 py-1 hover:bg-slate-100 active:cursor-grabbing"
+            className="flex cursor-grab items-center gap-2 px-3 py-1 hover:bg-stone-100 active:cursor-grabbing"
           >
             <span
               className={[
@@ -221,19 +218,19 @@ function Section({ title, rows }: { title: string; rows: ColumnInfo[] }) {
                     ? "bg-emerald-100 text-emerald-700"
                     : col.kind === "date"
                       ? "bg-amber-100 text-amber-700"
-                      : "bg-slate-200 text-slate-700",
+                      : "bg-stone-200 text-stone-700",
               ].join(" ")}
               title={col.kind}
             >
               {GLYPH[col.kind]}
             </span>
             <span
-              className="flex-1 truncate font-mono text-xs text-slate-800"
+              className="flex-1 truncate font-mono text-xs text-stone-800"
               title={col.name}
             >
               {col.name}
             </span>
-            <span className="font-mono text-[10px] text-slate-400">
+            <span className="font-mono text-[10px] text-stone-400">
               {TYPE_LABEL[col.kind]}
             </span>
           </li>

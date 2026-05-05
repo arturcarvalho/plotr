@@ -1,54 +1,63 @@
 // Shared signal for the chip drag-and-drop UX:
-// - `hoverCount`  — how many <Dropzone /> elements currently have the cursor over them
-// - `dragging`    — whether some chip is actively being dragged
-// - `willDelete`  — convenience: a chip is being dragged and no dropzone is hovered
-let hoverCount = 0;
+// - `dragging`     — whether some chip is actively being dragged
+// - `dropAccepted` — whether the drop landed on a Dropzone (true) or escaped (false)
+// Each side panel tracks its own hovered state locally, so we don't need
+// to maintain a global hover counter (which is racy with bubbled dragenter
+// events fired around drag-start).
 let dragging = false;
+let dropAccepted = false;
+let cleanupActive: (() => void) | null = null;
 const listeners = new Set<() => void>();
 const emit = () => {
   for (const l of listeners) l();
 };
 
 export const dragSignal = {
-  enter() {
-    hoverCount++;
-    emit();
-  },
-  leave() {
-    hoverCount = Math.max(0, hoverCount - 1);
-    emit();
-  },
   startDrag() {
+    // Defensive: if a previous drag's window listeners are still attached
+    // (e.g., startDrag fired twice without an intervening drop/dragend),
+    // tear them down before installing a fresh set.
+    if (cleanupActive) cleanupActive();
     dragging = true;
+    dropAccepted = false;
     emit();
-    // Install a one-shot window-level fallback: when a drop succeeds and
-    // the source chip is unmounted in the same render, its own `dragend`
-    // never fires. `dragend`/`drop` bubble to window so we use those.
     if (typeof window !== "undefined") {
+      // Window-level dragover preventDefault + dropEffect="move" disables
+      // Chrome's ~200ms drag-image snap-back animation when dropping outside
+      // any dropzone, so `dragend` fires immediately on mouse release.
+      const onDragOver = (e: DragEvent) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      };
       const off = () => {
+        window.removeEventListener("dragover", onDragOver);
         window.removeEventListener("dragend", off);
         window.removeEventListener("drop", off);
-        dragging = false;
-        hoverCount = 0;
-        emit();
+        cleanupActive = null;
+        if (dragging) {
+          dragging = false;
+          emit();
+        }
       };
+      cleanupActive = off;
+      window.addEventListener("dragover", onDragOver);
       window.addEventListener("dragend", off);
       window.addEventListener("drop", off);
     }
   },
   endDrag() {
+    if (!dragging) return;
     dragging = false;
-    hoverCount = 0;
     emit();
+  },
+  markDropAccepted() {
+    dropAccepted = true;
+  },
+  wasDropAccepted() {
+    return dropAccepted;
   },
   isDragging() {
     return dragging;
-  },
-  hoverCount() {
-    return hoverCount;
-  },
-  willDelete() {
-    return dragging && hoverCount === 0;
   },
   subscribe(fn: () => void) {
     listeners.add(fn);

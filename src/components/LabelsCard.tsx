@@ -1,35 +1,42 @@
 interface Props {
   open: boolean;
   onToggle: () => void;
+  onRemove?: () => void;
 }
 
-export function LabelsCard({ open, onToggle }: Props) {
+export function LabelsCard({ open, onToggle, onRemove }: Props) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={[
-        "flex w-full items-center justify-between rounded px-3 py-2 font-mono text-xs transition-colors",
-        open
-          ? "bg-slate-800 text-slate-100 hover:bg-slate-700"
-          : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100",
-      ].join(" ")}
-    >
-      <span>Labels</span>
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={open ? "text-slate-300" : "text-slate-500"}
-        aria-hidden
+    <div className="group relative mb-1.5">
+      <button
+        type="button"
+        onClick={onToggle}
+        title="Labels"
+        aria-label="Labels"
+        className={[
+          "flex h-10 w-10 items-center justify-center rounded font-mono text-base font-bold transition-colors",
+          open
+            ? "bg-stone-100 text-stone-800 hover:bg-stone-200"
+            : "border border-stone-200 bg-white text-stone-700 hover:bg-stone-100",
+        ].join(" ")}
       >
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-    </button>
+        T
+      </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove labels"
+          title="Remove labels"
+          className={[
+            "absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-stone-300 bg-white font-mono text-xs leading-none text-stone-500 shadow-sm transition-opacity hover:border-red-300 hover:bg-red-50 hover:text-red-700",
+            open
+              ? "opacity-100"
+              : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100",
+          ].join(" ")}
+        >
+          ×
+        </button>
+      )}
+    </div>
   );
 }

@@ -3,10 +3,10 @@ interface Props {
   warnings: string[];
 }
 
-export function Errors({ errors, warnings }: Props) {
+export function ProblemsPanel({ errors, warnings }: Props) {
   if (errors.length === 0 && warnings.length === 0) {
     return (
-      <div className="flex h-full items-center px-4 text-xs text-slate-400">
+      <div className="flex h-full items-center px-4 text-xs text-stone-400">
         No problems.
       </div>
     );

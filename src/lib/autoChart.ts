@@ -1,5 +1,5 @@
 import type { ColumnInfo } from "./ggsql";
-import type { Layer } from "./buildQuery";
+import type { Aes, Layer } from "./buildQuery";
 
 export const AUTO = "auto";
 
@@ -24,7 +24,6 @@ const RULES: Rule[] = [
   { x: "time", y: "empty", draw: "bar", role: "compatible" },
   { x: "empty", y: "discrete", draw: "bar", role: "default" },
   { x: "empty", y: "continuous", draw: "line", role: "default" },
-  { x: "empty", y: "continuous", draw: "path", role: "compatible" },
   { x: "empty", y: "continuous", draw: "area", role: "compatible" },
   { x: "continuous", y: "discrete", draw: "bar", role: "default" },
   { x: "continuous", y: "discrete", draw: "boxplot", role: "compatible" },
@@ -37,7 +36,6 @@ const RULES: Rule[] = [
   { x: "discrete", y: "continuous", draw: "text", role: "compatible" },
   { x: "continuous", y: "continuous", draw: "point", role: "default" },
   { x: "continuous", y: "continuous", draw: "line", role: "compatible" },
-  { x: "continuous", y: "continuous", draw: "path", role: "compatible" },
   { x: "continuous", y: "continuous", draw: "area", role: "compatible" },
   { x: "continuous", y: "continuous", draw: "smooth", role: "compatible" },
   { x: "continuous", y: "continuous", draw: "text", role: "compatible" },
@@ -85,9 +83,10 @@ export function defaultDraw(x: AxisKind, y: AxisKind): string | null {
 export function resolveDraw(
   layer: Layer,
   columns: ColumnInfo[],
+  shared?: Partial<Record<Aes, string>>,
 ): string | null {
   if (layer.draw !== AUTO) return layer.draw;
-  const xK = columnAxisKind(columns, layer.mappings.x);
-  const yK = columnAxisKind(columns, layer.mappings.y);
+  const xK = columnAxisKind(columns, layer.mappings.x ?? shared?.x);
+  const yK = columnAxisKind(columns, layer.mappings.y ?? shared?.y);
   return defaultDraw(xK, yK);
 }

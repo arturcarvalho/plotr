@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --color-app-chrome: var(--color-stone-100);
+}
+
 html,
 body,
 #root {
@@ -19,16 +23,26 @@ body {
 }
 .ggsql-table th,
 .ggsql-table td {
-  border: 1px solid var(--color-slate-200);
+  border: 1px solid var(--color-stone-200);
   padding: 0.25rem 0.5rem;
   text-align: left;
 }
 .ggsql-table thead {
-  background: var(--color-slate-50);
+  background: var(--color-stone-50);
   font-weight: 600;
 }
 .ggsql-table .truncation-row td {
   text-align: center;
   font-style: italic;
-  color: var(--color-slate-500);
+  color: var(--color-stone-500);
+}
+
+.vega-embed {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.vega-embed .marks {
+  width: 100%;
+  height: 100%;
 }

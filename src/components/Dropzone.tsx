@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Aes } from "../lib/buildQuery";
 import { dragSignal } from "../lib/dragSignal";
 
@@ -30,12 +30,6 @@ export function Dropzone({
 }: Props) {
   const [over, setOver] = useState(false);
 
-  useEffect(() => {
-    if (!over) return;
-    dragSignal.enter();
-    return () => dragSignal.leave();
-  }, [over]);
-
   return (
     <div
       onDragOver={(e) => {
@@ -60,6 +54,7 @@ export function Dropzone({
             src = undefined;
           }
         }
+        dragSignal.markDropAccepted();
         if (
           src &&
           src.layerId === source.layerId &&
@@ -71,7 +66,7 @@ export function Dropzone({
       }}
       className={[
         "flex h-9 w-full items-center gap-1 rounded border-2 border-dashed bg-white px-2 transition-colors",
-        over ? "border-sky-400 bg-sky-50" : "border-slate-300",
+        over ? "border-sky-400 bg-sky-50" : "border-stone-300",
       ].join(" ")}
     >
       {value ? (
@@ -83,17 +78,18 @@ export function Dropzone({
             e.dataTransfer.effectAllowed = "move";
             setTimeout(() => dragSignal.startDrag(), 0);
           }}
-          onDragEnd={(e) => {
+          onDragEnd={() => {
+            const accepted = dragSignal.wasDropAccepted();
             dragSignal.endDrag();
-            if (e.dataTransfer.dropEffect === "none") onClear();
+            if (!accepted) onClear();
           }}
-          className="inline-flex cursor-grab select-none items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs text-slate-800 active:cursor-grabbing"
+          className="inline-flex cursor-grab select-none items-center gap-1 rounded bg-stone-200 px-1.5 py-0.5 font-mono text-xs text-stone-800 active:cursor-grabbing"
           title={value}
         >
           {value}
         </span>
       ) : (
-        <span className="font-mono text-xs italic text-slate-400">
+        <span className="font-mono text-xs italic text-stone-400">
           {placeholder ?? ""}
         </span>
       )}
@@ -106,8 +102,8 @@ export function Dropzone({
           className={[
             "ml-auto rounded p-0.5 transition-colors",
             settingsOpen
-              ? "bg-slate-800 text-slate-100"
-              : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
+              ? "bg-stone-800 text-stone-100"
+              : "text-stone-400 hover:bg-stone-100 hover:text-stone-700",
           ].join(" ")}
         >
           <svg

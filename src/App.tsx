@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
 import vegaEmbed from "vega-embed";
 import { Warn } from "vega";
 import { ggsql, type ColumnInfo } from "./lib/ggsql";
@@ -7,21 +8,27 @@ import {
   AUTO,
   buildQuery,
   type Aes,
-  type Labels,
+  type LabelsLayer,
   type Layer,
   type LayerSettings,
   type ProjectSettings,
 } from "./lib/buildQuery";
 import { columnAxisKind, compatibleDraws, resolveDraw } from "./lib/autoChart";
 import { deserialize, serialize } from "./lib/persist";
-import { Sidebar } from "./components/Sidebar";
-import { BuildPane } from "./components/BuildPane";
-import { CodePanel } from "./components/CodePanel";
-import { LabelsPanel } from "./components/LabelsPanel";
+import { BuildPanel } from "./components/BuildPanel";
 import { ChartPanel } from "./components/ChartPanel";
+import { ChartTypePanel } from "./components/ChartTypePanel";
+import { DataPanel } from "./components/DataPanel";
+import { GGSQLPanel } from "./components/GGSQLPanel";
+import { LabelsPanel } from "./components/LabelsPanel";
 import { MappingPanel } from "./components/MappingPanel";
+import {
+  SHARED_MAPPINGS_KEY,
+  SharedMappingsPanel,
+} from "./components/SharedMappingsPanel";
 import { Viz } from "./components/Viz";
-import { Errors } from "./components/Errors";
+import { ProblemsPanel } from "./components/ProblemsPanel";
+import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 
 const newId = () => Math.random().toString(36).slice(2, 9);
 
@@ -33,9 +40,14 @@ const initialLayer = (): Layer => ({
 
 type ActivePanel =
   | null
-  | { kind: "labels" }
-  | { kind: "chart"; layerId: string }
-  | { kind: "mapping"; layerId: string; aes: Aes };
+  | { kind: "labels"; labelsId: string }
+  | { kind: "shared" }
+  | { kind: "layer"; layerId: string };
+
+type SecondaryPanel =
+  | null
+  | { kind: "settings" }
+  | { kind: "mapping"; aes: Aes };
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -44,49 +56,69 @@ export default function App() {
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [layers, setLayers] = useState<Layer[]>(() => [initialLayer()]);
-  const [labels, setLabels] = useState<Labels>({});
+  const [labels, setLabels] = useState<LabelsLayer[]>([]);
   const [project, setProject] = useState<ProjectSettings>({});
-  const [expandedId, setExpandedId] = useState<string | null>(() => null);
+  const [sharedMappings, setSharedMappings] = useState<
+    Partial<Record<Aes, string>>
+  >({});
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
+  const [secondaryPanel, setSecondaryPanel] = useState<SecondaryPanel>(null);
+  const [bottomTab, setBottomTab] = useState<BottomTab>("ggsql");
   const vizRef = useRef<HTMLDivElement>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from URL hash on mount, then expand the first layer card.
+  // Hydrate from URL hash on mount, then auto-open the first layer's panel.
   useEffect(() => {
-    const data = deserialize(
-      typeof window !== "undefined" ? window.location.hash : "",
-    );
-    if (data) {
-      if (data.layers.length > 0) {
-        setLayers(data.layers);
-        setExpandedId(data.layers[0].id);
-      } else {
-        setExpandedId(layers[0]?.id ?? null);
+    let cancelled = false;
+    (async () => {
+      const data = await deserialize(
+        typeof window !== "undefined" ? window.location.hash : "",
+      );
+      if (cancelled) return;
+      let firstLayerId: string | null = layers[0]?.id ?? null;
+      if (data) {
+        if (data.layers.length > 0) {
+          setLayers(data.layers);
+          firstLayerId = data.layers[0].id;
+        }
+        setLabels(data.labels);
+        setProject(data.project);
+        setSharedMappings(data.sharedMappings);
+        if (data.activeTable) setActiveTable(data.activeTable);
       }
-      setLabels(data.labels);
-      setProject(data.project);
-      if (data.activeTable) setActiveTable(data.activeTable);
-    } else {
-      setExpandedId(layers[0]?.id ?? null);
-    }
-    setHydrated(true);
+      if (firstLayerId) {
+        setActivePanel({ kind: "layer", layerId: firstLayerId });
+      }
+      setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Mirror persistable state into the URL hash whenever it changes.
   useEffect(() => {
     if (!hydrated) return;
-    const payload = serialize({
-      layers,
-      labels,
-      project,
-      activeTable,
-    });
-    const next = "#" + payload;
-    if (window.location.hash !== next) {
-      window.history.replaceState(null, "", next);
-    }
-  }, [hydrated, layers, labels, project, activeTable]);
+    let cancelled = false;
+    (async () => {
+      const payload = await serialize({
+        layers,
+        labels,
+        project,
+        sharedMappings,
+        activeTable,
+      });
+      if (cancelled) return;
+      const next = "#" + payload;
+      if (window.location.hash !== next) {
+        window.history.replaceState(null, "", next);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, layers, labels, project, sharedMappings, activeTable]);
 
   useEffect(() => {
     ggsql
@@ -113,28 +145,35 @@ export default function App() {
   const query = useMemo(
     () =>
       activeTable
-        ? buildQuery(activeTable, layers, labels, columns, project)
+        ? buildQuery(
+            activeTable,
+            layers,
+            labels,
+            columns,
+            project,
+            sharedMappings,
+          )
         : null,
-    [activeTable, layers, labels, columns, project],
+    [activeTable, layers, labels, columns, project, sharedMappings],
   );
 
   const compatibleDrawsByLayerId = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const l of layers) {
-      const xK = columnAxisKind(columns, l.mappings.x);
-      const yK = columnAxisKind(columns, l.mappings.y);
+      const xK = columnAxisKind(columns, l.mappings.x ?? sharedMappings.x);
+      const yK = columnAxisKind(columns, l.mappings.y ?? sharedMappings.y);
       map[l.id] = compatibleDraws(xK, yK);
     }
     return map;
-  }, [layers, columns]);
+  }, [layers, columns, sharedMappings]);
 
   const resolvedDrawByLayerId = useMemo(() => {
     const map: Record<string, string | null> = {};
     for (const l of layers) {
-      map[l.id] = resolveDraw(l, columns);
+      map[l.id] = resolveDraw(l, columns, sharedMappings);
     }
     return map;
-  }, [layers, columns]);
+  }, [layers, columns, sharedMappings]);
 
   // Build + render chart whenever inputs change
   useEffect(() => {
@@ -222,16 +261,22 @@ export default function App() {
     }
   };
 
-  const toggle = (id: string) =>
-    setExpandedId((cur) => (cur === id ? null : id));
-
   const onChangeDraw = (id: string, draw: string) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, draw } : l)));
 
   const onChangeSettings = (id: string, settings: LayerSettings) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, settings } : l)));
 
-  const onMap = (id: string, aes: Aes, col: string | undefined) =>
+  const onMap = (id: string, aes: Aes, col: string | undefined) => {
+    if (id === SHARED_MAPPINGS_KEY) {
+      setSharedMappings((cur) => {
+        if (col) return { ...cur, [aes]: col };
+        const next = { ...cur };
+        delete next[aes];
+        return next;
+      });
+      return;
+    }
     setLayers((ls) =>
       ls.map((l) => {
         if (l.id !== id) return l;
@@ -244,6 +289,7 @@ export default function App() {
         return { ...l, draw, mappings };
       }),
     );
+  };
 
   const onDrop = (
     dstLayerId: string,
@@ -254,67 +300,134 @@ export default function App() {
     setLayers((prev) =>
       prev.map((l) => {
         let mappings = l.mappings;
-        if (src && l.id === src.layerId) {
+        if (src && src.layerId !== SHARED_MAPPINGS_KEY && l.id === src.layerId) {
           const next: Layer["mappings"] = { ...mappings };
           delete next[src.aes];
           mappings = next;
         }
-        if (l.id === dstLayerId) {
+        if (dstLayerId !== SHARED_MAPPINGS_KEY && l.id === dstLayerId) {
           mappings = { ...mappings, [dstAes]: col };
         }
         const draw = Object.keys(mappings).length === 0 ? AUTO : l.draw;
         return mappings === l.mappings ? l : { ...l, draw, mappings };
       }),
     );
+    setSharedMappings((cur) => {
+      let next = cur;
+      if (src && src.layerId === SHARED_MAPPINGS_KEY) {
+        next = { ...next };
+        delete next[src.aes];
+      }
+      if (dstLayerId === SHARED_MAPPINGS_KEY) {
+        next = { ...next, [dstAes]: col };
+      }
+      return next;
+    });
   };
 
   const onAddLayer = () => {
     const layer = initialLayer();
     setLayers((ls) => [...ls, layer]);
-    setExpandedId(layer.id);
+    setActivePanel({ kind: "layer", layerId: layer.id });
+    setSecondaryPanel(null);
   };
 
   const onResetConfig = () => {
     const layer = initialLayer();
     setLayers([layer]);
-    setLabels({});
+    setLabels([]);
     setProject({});
-    setExpandedId(layer.id);
-    setActivePanel(null);
+    setSharedMappings({});
+    setActivePanel({ kind: "layer", layerId: layer.id });
+    setSecondaryPanel(null);
   };
 
-  const onRemoveLayer = (id: string) =>
-    setLayers((ls) => ls.filter((l) => l.id !== id));
+  const onRemoveLayer = (id: string) => {
+    setLayers((ls) => {
+      const idx = ls.findIndex((l) => l.id === id);
+      if (idx < 0) return ls;
+      setLabels((arr) =>
+        arr.map((l) =>
+          l.position > idx ? { ...l, position: l.position - 1 } : l,
+        ),
+      );
+      return ls.filter((l) => l.id !== id);
+    });
+    setActivePanel((p) =>
+      p?.kind === "layer" && p.layerId === id ? null : p,
+    );
+    setSecondaryPanel(null);
+  };
+
+  const onAddLabels = () => {
+    const newLabels: LabelsLayer = { id: newId(), position: layers.length };
+    setLabels((arr) => [...arr, newLabels]);
+    setActivePanel({ kind: "labels", labelsId: newLabels.id });
+    setSecondaryPanel(null);
+  };
+
+  const onUpdateLabels = (
+    labelsId: string,
+    patch: Partial<Pick<LabelsLayer, "title" | "subtitle" | "caption" | "x" | "y">>,
+  ) => {
+    setLabels((arr) =>
+      arr.map((l) => (l.id === labelsId ? { ...l, ...patch } : l)),
+    );
+  };
+
+  const onRemoveLabels = (labelsId: string) => {
+    setLabels((arr) => arr.filter((l) => l.id !== labelsId));
+    setActivePanel((p) =>
+      p?.kind === "labels" && p.labelsId === labelsId ? null : p,
+    );
+  };
+
+  const onChangeFile = () => {
+    setActiveTable(null);
+    onResetConfig();
+  };
 
   // Panel toggles ---------------------------------------------------------
-  const toggleLabelsPanel = () =>
+  const toggleLabelsPanel = (labelsId: string) => {
     setActivePanel((p) =>
-      p?.kind === "labels" ? null : { kind: "labels" },
-    );
-  const toggleChartPanel = (layerId: string) =>
-    setActivePanel((p) =>
-      p?.kind === "chart" && p.layerId === layerId
+      p?.kind === "labels" && p.labelsId === labelsId
         ? null
-        : { kind: "chart", layerId },
+        : { kind: "labels", labelsId },
     );
-  const toggleMappingPanel = (layerId: string, aes: Aes) =>
+    setSecondaryPanel(null);
+  };
+  const toggleSharedPanel = () => {
+    setActivePanel((p) => (p?.kind === "shared" ? null : { kind: "shared" }));
+    setSecondaryPanel(null);
+  };
+  const toggleLayerPanel = (layerId: string) => {
     setActivePanel((p) =>
-      p?.kind === "mapping" && p.layerId === layerId && p.aes === aes
+      p?.kind === "layer" && p.layerId === layerId
         ? null
-        : { kind: "mapping", layerId, aes },
+        : { kind: "layer", layerId },
     );
-  const closePanel = () => setActivePanel(null);
+    setSecondaryPanel(null);
+  };
+  const toggleMappingPanel = (aes: Aes) =>
+    setSecondaryPanel((s) =>
+      s?.kind === "mapping" && s.aes === aes
+        ? null
+        : { kind: "mapping", aes },
+    );
+  const toggleSettingsPanel = () =>
+    setSecondaryPanel((s) =>
+      s?.kind === "settings" ? null : { kind: "settings" },
+    );
+  const closeSecondaryPanel = () => setSecondaryPanel(null);
 
-  const hasMappings = layers.some((l) =>
-    AESTHETICS.some((a) => l.mappings[a]),
-  );
+  const hasMappings =
+    AESTHETICS.some((a) => sharedMappings[a]) ||
+    layers.some((l) => AESTHETICS.some((a) => l.mappings[a]));
   const isEmpty = !activeTable || !hasMappings;
 
   // Resolve which panel goes in the slot ----------------------------------
   const panelLayerId =
-    activePanel?.kind === "chart" || activePanel?.kind === "mapping"
-      ? activePanel.layerId
-      : null;
+    activePanel?.kind === "layer" ? activePanel.layerId : null;
   const panelLayer = panelLayerId
     ? layers.find((l) => l.id === panelLayerId) ?? null
     : null;
@@ -322,81 +435,121 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-white">
       <main className="flex min-h-0 flex-1">
-        <Sidebar
-          ready={ready}
-          activeTable={activeTable}
-          columns={columns}
-          onLoadCsv={onLoadCsv}
-          onLoadPenguins={() => setActiveTable("ggsql:penguins")}
-          onChangeFile={() => setActiveTable(null)}
-        />
-        <BuildPane
-          layers={layers}
-          expandedId={expandedId}
-          labelsOpen={activePanel?.kind === "labels"}
-          chartPanelLayerId={
-            activePanel?.kind === "chart" ? activePanel.layerId : null
-          }
-          mappingPanel={
-            activePanel?.kind === "mapping"
-              ? { layerId: activePanel.layerId, aes: activePanel.aes }
-              : null
-          }
-          resolvedDrawByLayerId={resolvedDrawByLayerId}
-          onToggle={toggle}
-          onToggleLabels={toggleLabelsPanel}
-          onToggleChartPanel={toggleChartPanel}
-          onToggleMappingPanel={toggleMappingPanel}
-          onMap={onMap}
-          onDrop={onDrop}
-          onAddLayer={onAddLayer}
-          onRemoveLayer={onRemoveLayer}
-          onReset={onResetConfig}
-        />
-        {activePanel?.kind === "labels" ? (
-          <LabelsPanel
-            labels={labels}
-            onChange={setLabels}
-            onClose={closePanel}
-          />
-        ) : activePanel?.kind === "chart" && panelLayer ? (
-          <ChartPanel
-            draw={panelLayer.draw}
-            resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
-            compatibleDraws={compatibleDrawsByLayerId[panelLayer.id] ?? []}
-            settings={panelLayer.settings ?? {}}
-            project={project}
-            onChangeDraw={(d) => onChangeDraw(panelLayer.id, d)}
-            onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
-            onChangeProject={setProject}
-            onClose={closePanel}
-          />
-        ) : activePanel?.kind === "mapping" && panelLayer ? (
-          <MappingPanel
-            aes={activePanel.aes}
-            settings={panelLayer.settings ?? {}}
-            onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
-            onClose={closePanel}
-          />
-        ) : (
-          <CodePanel query={query} />
-        )}
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-slate-200 bg-white">
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <Viz ref={vizRef} empty={isEmpty} />
+        <div className="flex min-h-0 flex-col bg-app-chrome">
+          <div className="flex items-baseline gap-2 px-3 py-2 font-mono">
+            <span className="text-sm font-semibold text-stone-800">plotr</span>
+            <span className="text-[10px] tracking-wide text-stone-400">
+              A drag-and-drop ggsql chart builder
+            </span>
+            <span className="rounded border border-amber-300 bg-amber-100 px-1 py-px text-[8px] font-bold uppercase tracking-wide text-amber-800">
+              Alpha
+            </span>
           </div>
-          <div className="h-40 shrink-0 border-t border-slate-200 bg-slate-50">
-            <div className="flex items-center justify-between border-b border-slate-200 px-3 py-1.5">
-              <span className="font-mono text-xs font-semibold text-slate-600">
-                Problems
-              </span>
-              <span className="font-mono text-xs text-slate-400">
-                {errors.length} error{errors.length === 1 ? "" : "s"} ·{" "}
-                {warnings.length} warning{warnings.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            <Errors errors={errors} warnings={warnings} />
+          <div className="flex min-h-0 flex-1 p-2 pt-0">
+            <DataPanel
+              ready={ready}
+              activeTable={activeTable}
+              columns={columns}
+              onLoadCsv={onLoadCsv}
+              onLoadPenguins={() => setActiveTable("ggsql:penguins")}
+              onChangeFile={onChangeFile}
+            />
+            <BuildPanel
+              layers={layers}
+              labels={labels}
+              activeLayerId={panelLayerId}
+              activeLabelsId={
+                activePanel?.kind === "labels" ? activePanel.labelsId : null
+              }
+              sharedOpen={activePanel?.kind === "shared"}
+              resolvedDrawByLayerId={resolvedDrawByLayerId}
+              onToggleLayer={toggleLayerPanel}
+              onToggleLabels={toggleLabelsPanel}
+              onToggleShared={toggleSharedPanel}
+              onAddLayer={onAddLayer}
+              onAddLabels={onAddLabels}
+              onRemoveLayer={onRemoveLayer}
+              onRemoveLabels={onRemoveLabels}
+            />
+            {activePanel?.kind === "labels" &&
+            labels.find((l) => l.id === activePanel.labelsId) ? (
+              <LabelsPanel
+                labels={labels.find((l) => l.id === activePanel.labelsId)!}
+                onChange={(patch) => onUpdateLabels(activePanel.labelsId, patch)}
+              />
+            ) : activePanel?.kind === "shared" ? (
+              <SharedMappingsPanel
+                mappings={sharedMappings}
+                onMap={(aes, col) => onMap(SHARED_MAPPINGS_KEY, aes, col)}
+                onDrop={(aes, col, src) =>
+                  onDrop(SHARED_MAPPINGS_KEY, aes, col, src)
+                }
+              />
+            ) : activePanel?.kind === "layer" && panelLayer ? (
+              <ChartPanel
+                layer={panelLayer}
+                resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
+                openMappingAes={
+                  secondaryPanel?.kind === "mapping" ? secondaryPanel.aes : null
+                }
+                onMap={(aes, col) => onMap(panelLayer.id, aes, col)}
+                onDrop={(aes, col, src) => onDrop(panelLayer.id, aes, col, src)}
+                onToggleMappingSettings={toggleMappingPanel}
+                onOpenSettings={toggleSettingsPanel}
+              />
+            ) : (
+              <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
+            )}
+            {secondaryPanel?.kind === "settings" && panelLayer ? (
+              <ChartTypePanel
+                resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
+                compatibleDraws={compatibleDrawsByLayerId[panelLayer.id] ?? []}
+                settings={panelLayer.settings ?? {}}
+                project={project}
+                onChangeDraw={(d) => onChangeDraw(panelLayer.id, d)}
+                onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
+                onChangeProject={setProject}
+                onRemove={
+                  layers.length > 1
+                    ? () => onRemoveLayer(panelLayer.id)
+                    : undefined
+                }
+                onClose={closeSecondaryPanel}
+              />
+            ) : secondaryPanel?.kind === "mapping" && panelLayer ? (
+              <MappingPanel
+                aes={secondaryPanel.aes}
+                settings={panelLayer.settings ?? {}}
+                onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
+                onClose={closeSecondaryPanel}
+              />
+            ) : (
+              <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
+            )}
           </div>
+        </div>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-stone-200 bg-white">
+          <Group orientation="vertical" className="flex h-full w-full flex-col">
+            <Panel defaultSize={75} minSize={20} style={{ overflow: "hidden" }}>
+              <Viz
+                ref={vizRef}
+                empty={isEmpty}
+                hasError={errors.length > 0}
+                onShowProblems={() => setBottomTab("problems")}
+              />
+            </Panel>
+            <Separator className="!h-1 !flex-grow-0 !flex-shrink-0 bg-stone-200 transition-colors hover:bg-sky-400" />
+            <Panel defaultSize={25} minSize={5} style={{ overflow: "hidden" }}>
+              <BottomTabs
+                tab={bottomTab}
+                onTabChange={setBottomTab}
+                errorCount={errors.length}
+                warningCount={warnings.length}
+                problems={<ProblemsPanel errors={errors} warnings={warnings} />}
+                ggsql={<GGSQLPanel query={query} />}
+              />
+            </Panel>
+          </Group>
         </section>
       </main>
     </div>
