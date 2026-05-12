@@ -76,6 +76,298 @@ describe("serialize / deserialize round-trip", () => {
     expect((await deserialize(s))?.labels[0].disabled).toBe(true);
   });
 
+  it("palette settings round-trip", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "a", y: "b" },
+          settings: {
+            fillPaletteDiscrete: "set1",
+            fillPaletteContinuous: "viridis",
+            strokePaletteDiscrete: "tableau10",
+            strokePaletteContinuous: "plasma",
+          },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      fillPaletteDiscrete: "set1",
+      fillPaletteContinuous: "viridis",
+      strokePaletteDiscrete: "tableau10",
+      strokePaletteContinuous: "plasma",
+    });
+  });
+
+  it("rule slope round-trips", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "rule",
+          mappings: { x: "a" },
+          settings: { slope: 0.5 },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      slope: 0.5,
+    });
+  });
+
+  it("text geom-specific settings round-trip", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "a", y: "b", label: "c" },
+          settings: {
+            italic: true,
+            hjust: 0.3,
+            vjust: 0.7,
+            rotation: 45,
+            format: "%.2f",
+          },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      italic: true,
+      hjust: 0.3,
+      vjust: 0.7,
+      rotation: 45,
+      format: "%.2f",
+    });
+  });
+
+  it("smooth method round-trips", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "smooth",
+          mappings: { x: "a", y: "b" },
+          settings: { method: "ols" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      method: "ols",
+    });
+  });
+
+  it("boxplot outliers (false) + coef round-trip", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "boxplot",
+          mappings: { x: "a", y: "b" },
+          settings: { outliers: false, coef: 2.5 },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      outliers: false,
+      coef: 2.5,
+    });
+  });
+
+  it("boxplot outliers explicit true round-trips (locks the default)", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "boxplot",
+          mappings: { x: "a", y: "b" },
+          settings: { outliers: true },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      outliers: true,
+    });
+  });
+
+  it("histogram bins + closed round-trip", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "histogram",
+          mappings: { x: "a" },
+          settings: { bins: 50, closed: "left" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      bins: 50,
+      closed: "left",
+    });
+  });
+
+  it("histogram binwidth round-trips (alternative bin strategy)", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "histogram",
+          mappings: { x: "a" },
+          settings: { binwidth: 0.25 },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      binwidth: 0.25,
+    });
+  });
+
+  it("violin geom-specific settings round-trip", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "violin",
+          mappings: { x: "a", y: "b" },
+          settings: {
+            bandwidth: 0.4,
+            adjust: 1.3,
+            kernel: "biweight",
+            side: "right",
+            tails: 2.5,
+          },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      bandwidth: 0.4,
+      adjust: 1.3,
+      kernel: "biweight",
+      side: "right",
+      tails: 2.5,
+    });
+  });
+
+  it("orientation setting round-trips", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "a", y: "b" },
+          settings: { orientation: "transposed" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      orientation: "transposed",
+    });
+  });
+
+  it("linewidth setting round-trips", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "a", y: "b" },
+          settings: { linewidth: 1.5 },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      linewidth: 1.5,
+    });
+  });
+
+  it("ymin / ymax aesthetic mappings round-trip", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "ribbon",
+          mappings: { x: "a", ymin: "lo", ymax: "hi" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].mappings).toEqual({
+      x: "a",
+      ymin: "lo",
+      ymax: "hi",
+    });
+  });
+
+  it("label aesthetic mapping round-trips", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "a", y: "b", label: "species" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].mappings).toEqual({
+      x: "a",
+      y: "b",
+      label: "species",
+    });
+  });
+
   it("layer disabled flag round-trips", async () => {
     const s = await serialize({
       layers: [
@@ -423,5 +715,62 @@ describe("deserialize tolerance", () => {
     const s = await serialize(sample);
     expect(await deserialize("#" + s)).toEqual(sample);
     expect(await deserialize(s)).toEqual(sample);
+  });
+});
+
+describe("customLayers persistence", () => {
+  it("round-trips a custom layer", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      customLayers: [
+        { id: "C1", ggsql: "SCALE x TO log", position: 0 },
+      ],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.customLayers).toEqual([
+      { id: "C1", ggsql: "SCALE x TO log", position: 0 },
+    ]);
+  });
+
+  it("round-trips disabled flag", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      customLayers: [
+        { id: "C1", ggsql: "SCALE x TO log", position: 1, disabled: true },
+      ],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.customLayers?.[0].disabled).toBe(true);
+  });
+
+  it("preserves order across multi-line ggsql + multiple entries", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      customLayers: [
+        { id: "A", ggsql: "FIRST\nLINE", position: 0 },
+        { id: "B", ggsql: "SECOND", position: 0 },
+      ],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    const back = await deserialize(s);
+    expect(back?.customLayers).toEqual([
+      { id: "A", ggsql: "FIRST\nLINE", position: 0 },
+      { id: "B", ggsql: "SECOND", position: 0 },
+    ]);
+  });
+
+  it("missing customLayers in payload defaults to undefined", async () => {
+    const payload = await wrap({});
+    const back = await deserialize(payload);
+    expect(back?.customLayers).toBeUndefined();
   });
 });

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildQuery, type Layer } from "./buildQuery";
+import {
+  buildQuery,
+  CHART_LABELS,
+  DRAW_TYPES,
+  type CustomLayer,
+  type Layer,
+} from "./buildQuery";
 import { AUTO } from "./autoChart";
 import type { ColumnInfo } from "./ggsql";
 
@@ -412,6 +418,369 @@ describe("buildQuery emits per-layer SETTING", () => {
     expect(q).toContain("SETTING fill => 'O''Brien'");
   });
 
+  it("emits linewidth setting", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { linewidth: 1.5 },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SETTING linewidth => 1.5");
+  });
+
+  it("emits orientation setting on line", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { orientation: "aligned" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SETTING orientation => 'aligned'");
+  });
+
+  it("emits range's geom-specific stack with ymin/ymax mappings", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "range",
+          mappings: { x: "bill_len", ymin: "bill_dep", ymax: "bill_len" },
+          settings: { width: 8, position: "identity", linewidth: 1.5 },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW range MAPPING bill_len AS x, bill_dep AS ymin, bill_len AS ymax SETTING width => 8, position => 'identity', linewidth => 1.5",
+    );
+  });
+
+  it("emits ribbon's geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "ribbon",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { position: "identity", linewidth: 0.5 },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW ribbon MAPPING bill_len AS x, bill_dep AS y SETTING position => 'identity', linewidth => 0.5",
+    );
+  });
+
+  it("emits smooth's full geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "smooth",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: {
+            position: "identity",
+            linewidth: 2,
+            bandwidth: 0.4,
+            adjust: 1.1,
+            kernel: "gaussian",
+            method: "ols",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW smooth MAPPING bill_len AS x, bill_dep AS y SETTING position => 'identity', linewidth => 2, bandwidth => 0.4, adjust => 1.1, kernel => 'gaussian', method => 'ols'",
+    );
+  });
+
+  it("emits area's geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "area",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: {
+            position: "stack",
+            linewidth: 0.8,
+            orientation: "transposed",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW area MAPPING bill_len AS x, bill_dep AS y SETTING position => 'stack', linewidth => 0.8, orientation => 'transposed'",
+    );
+  });
+
+  it("emits rule's geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "rule",
+          mappings: { x: "bill_len" },
+          settings: { linewidth: 1.5, slope: 0.5 },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW rule MAPPING bill_len AS x SETTING linewidth => 1.5, slope => 0.5",
+    );
+  });
+
+  it("emits text's full geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+          settings: {
+            position: "identity",
+            italic: true,
+            hjust: 0.3,
+            vjust: 0.7,
+            rotation: 45,
+            format: "%.2f",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW text MAPPING bill_len AS x, bill_dep AS y, species AS label SETTING position => 'identity', italic => true, hjust => 0.3, vjust => 0.7, rotation => 45, format => '%.2f'",
+    );
+  });
+
+  it("emits density's full geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "density",
+          mappings: { x: "bill_len" },
+          settings: {
+            position: "identity",
+            linewidth: 1.5,
+            bandwidth: 0.3,
+            adjust: 1.2,
+            kernel: "epanechnikov",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW density MAPPING bill_len AS x SETTING position => 'identity', linewidth => 1.5, bandwidth => 0.3, adjust => 1.2, kernel => 'epanechnikov'",
+    );
+  });
+
+  it("emits boxplot's geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "boxplot",
+          mappings: { x: "species", y: "bill_len" },
+          settings: {
+            width: 0.6,
+            position: "dodge",
+            linewidth: 1.2,
+            outliers: false,
+            coef: 2,
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW boxplot MAPPING species AS x, bill_len AS y SETTING width => 0.6, position => 'dodge', linewidth => 1.2, outliers => false, coef => 2",
+    );
+  });
+
+  it("emits bins + position + closed on histogram in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "histogram",
+          mappings: { x: "bill_len" },
+          settings: { position: "stack", bins: 50, closed: "left" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW histogram MAPPING bill_len AS x SETTING position => 'stack', bins => 50, closed => 'left'",
+    );
+  });
+
+  it("emits binwidth + closed on histogram (binwidth strategy)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "histogram",
+          mappings: { x: "bill_len" },
+          settings: { binwidth: 0.5, closed: "right" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW histogram MAPPING bill_len AS x SETTING binwidth => 0.5, closed => 'right'",
+    );
+  });
+
+  it("emits violin's full geom-specific stack in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "violin",
+          mappings: { x: "species", y: "bill_len" },
+          settings: {
+            width: 0.7,
+            position: "dodge",
+            linewidth: 1,
+            bandwidth: 0.5,
+            adjust: 1.2,
+            kernel: "epanechnikov",
+            side: "left",
+            tails: 2,
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW violin MAPPING species AS x, bill_len AS y SETTING width => 0.7, position => 'dodge', linewidth => 1, bandwidth => 0.5, adjust => 1.2, kernel => 'epanechnikov', side => 'left', tails => 2",
+    );
+  });
+
+  it("emits linewidth + position on tile in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "tile",
+          mappings: { x: "species", y: "species" },
+          settings: { position: "identity", linewidth: 0.5 },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW tile MAPPING species AS x, species AS y SETTING position => 'identity', linewidth => 0.5",
+    );
+  });
+
+  it("emits linewidth + orientation on line in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { linewidth: 2, orientation: "transposed" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW line MAPPING bill_len AS x, bill_dep AS y SETTING linewidth => 2, orientation => 'transposed'",
+    );
+  });
+
+  it("bar regression: width + position + fill + opacity emit in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "bar",
+          mappings: { x: "species" },
+          settings: {
+            width: 0.5,
+            position: "stack",
+            fill: "blue",
+            opacity: 0.7,
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW bar MAPPING species AS x SETTING width => 0.5, position => 'stack', fill => 'blue', opacity => 0.7",
+    );
+  });
+
+  it("emits position + linewidth on point in canonical order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { position: "jitter", linewidth: 0.5 },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW point MAPPING bill_len AS x, bill_dep AS y SETTING position => 'jitter', linewidth => 0.5",
+    );
+  });
+
   it("undefined or empty settings → no SETTING clause", () => {
     const noSettings = buildQuery(
       "ggsql:penguins",
@@ -434,6 +803,85 @@ describe("buildQuery emits per-layer SETTING", () => {
       COLS,
     );
     expect(emptySettings).not.toContain("SETTING");
+  });
+});
+
+describe("ymin / ymax aesthetics (ribbon only)", () => {
+  it("emits ymin + ymax mappings for ribbon geom", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "ribbon",
+          mappings: {
+            x: "bill_len",
+            ymin: "bill_dep",
+            ymax: "bill_len",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("bill_dep AS ymin");
+    expect(q).toContain("bill_len AS ymax");
+  });
+
+  it("does NOT emit ymin / ymax for non-ribbon geom", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: {
+            x: "bill_len",
+            y: "bill_dep",
+            ymin: "bill_dep",
+            ymax: "bill_len",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("AS ymin");
+    expect(q).not.toContain("AS ymax");
+  });
+});
+
+describe("label aesthetic (text geom only)", () => {
+  it("emits label mapping for text geom", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("species AS label");
+  });
+
+  it("does NOT emit label mapping for non-text geom", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("AS label");
   });
 });
 
@@ -608,6 +1056,207 @@ describe("shared mappings (VISUALISE level)", () => {
   });
 });
 
+describe("buildQuery emits SCALE for palettes", () => {
+  it("discrete fill mapping + fillPaletteDiscrete → SCALE fill TO <palette>", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+          settings: { fillPaletteDiscrete: "set1" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("species AS fill");
+    expect(q).toContain("SCALE fill TO set1");
+  });
+
+  it("continuous fill mapping + fillPaletteContinuous → SCALE fill TO <palette>", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "bill_dep" },
+          settings: { fillPaletteContinuous: "viridis" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("bill_dep AS fill");
+    expect(q).toContain("SCALE fill TO viridis");
+  });
+
+  it("date fill mapping uses fillPaletteContinuous", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "born_at" },
+          settings: { fillPaletteContinuous: "viridis" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE fill TO viridis");
+  });
+
+  it("palette slot is emitted regardless of mapping (no mapping)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { fillPaletteDiscrete: "set1" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE fill TO set1");
+  });
+
+  it("empty palette slot → no SCALE clause (ggsql default applies)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("SCALE");
+  });
+
+  it("stroke mapping + strokePaletteDiscrete emits SCALE stroke", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "bill_len", y: "bill_dep", stroke: "species" },
+          settings: { strokePaletteDiscrete: "tableau10" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE stroke TO tableau10");
+  });
+
+  it("fixed fill setting and fill mapping both emit (mapping does not suppress SETTING)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+          settings: { fill: "blue" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("fill => 'blue'");
+    expect(q).toContain("species AS fill");
+  });
+
+  it("all three slots set → SETTING + both SCALE clauses emitted", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: {
+            fill: "blue",
+            fillPaletteDiscrete: "set1",
+            fillPaletteContinuous: "viridis",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("fill => 'blue'");
+    expect(q).toContain("SCALE fill TO set1");
+    expect(q).toContain("SCALE fill TO viridis");
+  });
+
+  it("explicit default palette name still emits SCALE clause", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+          settings: { fillPaletteDiscrete: "ggsql10" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE fill TO ggsql10");
+  });
+
+  it("noFill still wins over mapping (emits SETTING fill => null) and SCALE still emits", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+          settings: { noFill: true, fillPaletteDiscrete: "set1" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("fill => null");
+    expect(q).not.toContain("species AS fill");
+    expect(q).toContain("SCALE fill TO set1");
+  });
+
+  it("shared fill mapping picks up first layer's palette", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: {},
+          settings: { fillPaletteDiscrete: "set2" },
+        },
+      ],
+      [],
+      COLS,
+      undefined,
+      { x: "bill_len", y: "bill_dep", fill: "species" },
+    );
+    expect(q).toContain("SCALE fill TO set2");
+  });
+});
+
 describe("buildQuery emits PROJECT clause", () => {
   const baseLayers: Layer[] = [
     { id: "L", draw: "point", mappings: { x: "bill_len", y: "bill_dep" } },
@@ -647,5 +1296,242 @@ describe("buildQuery emits PROJECT clause", () => {
   it("undefined project → no PROJECT line", () => {
     const q = buildQuery("ggsql:penguins", baseLayers, [], COLS);
     expect(q).not.toContain("PROJECT");
+  });
+});
+
+describe("buildQuery pie chart (translates to bar + PROJECT TO polar)", () => {
+  it("DRAW_TYPES includes 'pie'", () => {
+    expect(DRAW_TYPES).toContain("pie");
+  });
+
+  it("concrete pie layer with fill emits DRAW bar + PROJECT TO polar", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("pie", { fill: "species" })],
+      [],
+      COLS,
+    );
+    expect(q).toContain("DRAW bar MAPPING species AS fill");
+    expect(q).toContain("PROJECT TO polar");
+    expect(q).not.toContain("DRAW pie");
+  });
+
+  it("AUTO layer with only fill resolves to pie and emits bar + polar", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer(AUTO, { fill: "species" })],
+      [],
+      COLS,
+    );
+    expect(q).toContain("DRAW bar MAPPING species AS fill");
+    expect(q).toContain("PROJECT TO polar");
+  });
+
+  it("two pie layers → PROJECT TO polar appears exactly once", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        layer("pie", { fill: "species" }, "L1"),
+        layer("pie", { fill: "born_at" }, "L2"),
+      ],
+      [],
+      COLS,
+    );
+    const matches = q?.match(/PROJECT TO polar/g) ?? [];
+    expect(matches.length).toBe(1);
+  });
+
+  it("pie overrides cartesian project settings (polar wins, no cartesian line)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("pie", { fill: "species" })],
+      [],
+      COLS,
+      { clip: false },
+    );
+    expect(q).toContain("PROJECT TO polar");
+    expect(q).not.toContain("PROJECT TO cartesian");
+  });
+
+  it("disabled pie layer → no polar projection emitted", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        { ...layer("pie", { fill: "species" }), disabled: true },
+        layer("point", { x: "bill_len", y: "bill_dep" }),
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("DRAW point");
+    expect(q).not.toContain("PROJECT TO polar");
+    expect(q).not.toContain("DRAW bar");
+  });
+});
+
+describe("buildQuery custom layers (per-position insertion)", () => {
+  const customLayer = (
+    ggsql: string,
+    position: number,
+    id = "C",
+  ): CustomLayer => ({ id, ggsql, position });
+
+  it("custom at position 0 emits before the first DRAW", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("point", { x: "bill_len", y: "bill_dep" }, "L0")],
+      [],
+      COLS,
+      undefined,
+      undefined,
+      [customLayer("SCALE x TO log", 0, "C0")],
+    );
+    const lines = q!.split("\n");
+    const customIdx = lines.indexOf("SCALE x TO log");
+    const drawIdx = lines.findIndex((l) => l.startsWith("DRAW"));
+    expect(customIdx).toBeGreaterThanOrEqual(0);
+    expect(drawIdx).toBeGreaterThan(customIdx);
+  });
+
+  it("custom at position 1 sits between two DRAW lines", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        layer("point", { x: "bill_len", y: "bill_dep" }, "L0"),
+        layer("smooth", { x: "bill_len", y: "bill_dep" }, "L1"),
+      ],
+      [],
+      COLS,
+      undefined,
+      undefined,
+      [customLayer("SETTING anchor => 'top'", 1, "C0")],
+    );
+    const lines = q!.split("\n");
+    const drawIdxs = lines
+      .map((l, i) => (l.startsWith("DRAW") ? i : -1))
+      .filter((i) => i >= 0);
+    const customIdx = lines.indexOf("SETTING anchor => 'top'");
+    expect(drawIdxs.length).toBe(2);
+    expect(customIdx).toBeGreaterThan(drawIdxs[0]);
+    expect(customIdx).toBeLessThan(drawIdxs[1]);
+  });
+
+  it("custom at trailing position appears after all DRAW lines, before SCALE/FACET/PROJECT/LABEL", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        layer("point", { x: "bill_len", y: "bill_dep" }, "L0"),
+        layer("smooth", { x: "bill_len", y: "bill_dep" }, "L1"),
+      ],
+      [{ title: "Hi" }],
+      COLS,
+      { clip: false },
+      undefined,
+      [customLayer("SCALE y TO sqrt", 2, "C0")],
+    );
+    const lines = q!.split("\n");
+    const customIdx = lines.indexOf("SCALE y TO sqrt");
+    const drawIdxs = lines
+      .map((l, i) => (l.startsWith("DRAW") ? i : -1))
+      .filter((i) => i >= 0);
+    const lastDrawIdx = drawIdxs[drawIdxs.length - 1];
+    const projectIdx = lines.findIndex((l) => l.startsWith("PROJECT"));
+    const labelIdx = lines.findIndex((l) => l.startsWith("LABEL"));
+    expect(customIdx).toBeGreaterThan(lastDrawIdx);
+    expect(customIdx).toBeLessThan(projectIdx);
+    expect(customIdx).toBeLessThan(labelIdx);
+  });
+
+  it("disabled custom is skipped", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("point", { x: "bill_len", y: "bill_dep" }, "L0")],
+      [],
+      COLS,
+      undefined,
+      undefined,
+      [{ ...customLayer("SCALE x TO log", 0, "C0"), disabled: true }],
+    );
+    expect(q).not.toContain("SCALE x TO log");
+  });
+
+  it("empty / whitespace-only ggsql is skipped", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("point", { x: "bill_len", y: "bill_dep" }, "L0")],
+      [],
+      COLS,
+      undefined,
+      undefined,
+      [
+        customLayer("", 0, "C0"),
+        customLayer("   \n  \t", 0, "C1"),
+      ],
+    );
+    const lines = q!.split("\n");
+    expect(lines.filter((l) => l === "").length).toBe(0);
+    // The query has only the standard structure (no extra blank lines from skipped customs).
+    expect(lines).toContain("DRAW point MAPPING bill_len AS x, bill_dep AS y");
+  });
+
+  it("multi-line ggsql is preserved verbatim", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("point", { x: "bill_len", y: "bill_dep" }, "L0")],
+      [],
+      COLS,
+      undefined,
+      undefined,
+      [customLayer("SCALE x TO log\nPROJECT TO polar", 1, "C0")],
+    );
+    expect(q).toContain("SCALE x TO log\nPROJECT TO polar");
+  });
+
+  it("two customs at the same position emit in array order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("point", { x: "bill_len", y: "bill_dep" }, "L0")],
+      [],
+      COLS,
+      undefined,
+      undefined,
+      [
+        customLayer("FIRST", 0, "C0"),
+        customLayer("SECOND", 0, "C1"),
+      ],
+    );
+    const lines = q!.split("\n");
+    const firstIdx = lines.indexOf("FIRST");
+    const secondIdx = lines.indexOf("SECOND");
+    expect(firstIdx).toBeGreaterThanOrEqual(0);
+    expect(secondIdx).toBeGreaterThan(firstIdx);
+  });
+});
+
+describe("DRAW_TYPES order is locked", () => {
+  it("matches the agreed grid order — update + ASK USER before reshuffling", () => {
+    expect(DRAW_TYPES).toEqual([
+      "point",
+      "bar",
+      "line",
+      "tile",
+      "violin",
+      "pie",
+      "histogram",
+      "boxplot",
+      "density",
+      "area",
+      "smooth",
+      "ribbon",
+      "range",
+      "text",
+      "rule",
+    ]);
+  });
+
+  it("every DRAW_TYPES entry has a CHART_LABELS mapping", () => {
+    for (const t of DRAW_TYPES) {
+      expect(CHART_LABELS[t]).toBeDefined();
+    }
   });
 });

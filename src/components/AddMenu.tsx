@@ -3,10 +3,11 @@ import { createPortal } from "react-dom";
 
 interface Props {
   onAddChart: () => void;
+  onAddCustom: () => void;
   onAddLabels: () => void;
 }
 
-export function AddMenu({ onAddChart, onAddLabels }: Props) {
+export function AddMenu({ onAddChart, onAddCustom, onAddLabels }: Props) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<
     | { left: number; top: number }
@@ -45,7 +46,7 @@ export function AddMenu({ onAddChart, onAddLabels }: Props) {
     }
     const rect = btnRef.current?.getBoundingClientRect();
     if (rect) {
-      const estDropdownHeight = 70;
+      const estDropdownHeight = 100;
       const fitsBelow =
         window.innerHeight - rect.bottom >= estDropdownHeight + 8;
       setPos(
@@ -87,6 +88,13 @@ export function AddMenu({ onAddChart, onAddLabels }: Props) {
               className="block w-full px-3 py-1.5 text-left font-mono text-xs text-stone-700 hover:bg-stone-100"
             >
               Chart
+            </button>
+            <button
+              type="button"
+              onClick={pick(onAddCustom)}
+              className="block w-full px-3 py-1.5 text-left font-mono text-xs text-stone-700 hover:bg-stone-100"
+            >
+              Custom
             </button>
             <button
               type="button"

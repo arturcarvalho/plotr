@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import {
   chartLabel,
+  GEOM_SPECIFIC_REQUIRED,
   type Aes,
   type Layer,
 } from "../lib/buildQuery";
@@ -36,6 +37,12 @@ export function ChartPanel({
   const dragging = useDragging();
   const [hovered, setHovered] = useState(false);
 
+  // Geom-specific aesthetics that ggsql needs but the layer hasn't mapped yet.
+  // MappingFields uses this to render the matching dropzones with an amber-
+  // dashed border so the user sees what's still required.
+  const required = GEOM_SPECIFIC_REQUIRED[resolvedDraw ?? ""] ?? [];
+  const missingRequired = required.filter((a) => !layer.mappings[a]);
+
   return (
     <aside
       ref={asideRef}
@@ -65,10 +72,12 @@ export function ChartPanel({
           </span>
         </button>
 
-        <div className="min-h-0 flex-1 overflow-y-auto py-3 pl-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-3 pl-3">
           <MappingFields
             mappings={layer.mappings}
             sourceId={layer.id}
+            resolvedDraw={resolvedDraw}
+            missingRequired={missingRequired}
             openMappingAes={openMappingAes}
             onMap={onMap}
             onDrop={onDrop}

@@ -220,9 +220,25 @@ const ReferenceLine: FC<IconProps> = ({ className }) => (
   </svg>
 );
 
+const PieChart: FC<IconProps> = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden
+  >
+    <path
+      fillRule="evenodd"
+      d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-18a8 8 0 1 0 8 8h-8z"
+    />
+  </svg>
+);
+
 const ICONS: Record<string, FC<IconProps>> = {
   point: ScatterPlot,
   bar: BarChart,
+  pie: PieChart,
   boxplot: Boxplot,
   histogram: Histogram,
   tile: Heatmap,

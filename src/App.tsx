@@ -8,18 +8,25 @@ import {
   AUTO,
   buildQuery,
   type Aes,
+  type CustomLayer,
   type LabelsLayer,
   type Layer,
   type LayerSettings,
   type ProjectSettings,
 } from "./lib/buildQuery";
-import { columnAxisKind, compatibleDraws, resolveDraw } from "./lib/autoChart";
+import {
+  columnAxisKind,
+  compatibleDraws,
+  resolveDraw,
+  resolveMappingKind,
+} from "./lib/autoChart";
 import { deserialize, serialize } from "./lib/persist";
 import { BuildPanel } from "./components/BuildPanel";
 import { ChartPanel } from "./components/ChartPanel";
 import { ChartTypePanel } from "./components/ChartTypePanel";
 import { DataPanel } from "./components/DataPanel";
 import { GGSQLPanel } from "./components/GGSQLPanel";
+import { CustomPanel } from "./components/CustomPanel";
 import { LabelsPanel } from "./components/LabelsPanel";
 import { MappingPanel } from "./components/MappingPanel";
 import {
@@ -28,7 +35,8 @@ import {
 } from "./components/SharedMappingsPanel";
 import { Viz } from "./components/Viz";
 import { ProblemsPanel } from "./components/ProblemsPanel";
-import { Tutorial } from "./components/Tutorial";
+import { TutorialOverlay } from "./components/Tutorial";
+import { isSeen, markSeen } from "./lib/tutorial";
 import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 
 const newId = () => Math.random().toString(36).slice(2, 9);
@@ -39,11 +47,23 @@ const initialLayer = (): Layer => ({
   mappings: {},
 });
 
+const initialLabels = (position: number): LabelsLayer => ({
+  id: newId(),
+  position,
+});
+
+const initialCustom = (position: number): CustomLayer => ({
+  id: newId(),
+  ggsql: "",
+  position,
+});
+
 type ActivePanel =
   | null
   | { kind: "labels"; labelsId: string }
   | { kind: "shared" }
-  | { kind: "layer"; layerId: string };
+  | { kind: "layer"; layerId: string }
+  | { kind: "custom"; customId: string };
 
 type SecondaryPanel =
   | null
@@ -57,12 +77,16 @@ export default function App() {
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [layers, setLayers] = useState<Layer[]>(() => [initialLayer()]);
-  const [labels, setLabels] = useState<LabelsLayer[]>([]);
+  const [labels, setLabels] = useState<LabelsLayer[]>(() => [initialLabels(1)]);
+  const [customLayers, setCustomLayers] = useState<CustomLayer[]>([]);
   const [project, setProject] = useState<ProjectSettings>({});
   const [sharedMappings, setSharedMappings] = useState<
     Partial<Record<Aes, string>>
   >({});
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
+  const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(() =>
+    isSeen() ? null : 1,
+  );
   const [secondaryPanel, setSecondaryPanel] = useState<SecondaryPanel>(null);
   const [bottomTab, setBottomTab] = useState<BottomTab>("ggsql");
   const vizRef = useRef<HTMLDivElement>(null);
@@ -82,12 +106,17 @@ export default function App() {
           setLayers(data.layers);
           firstLayerId = data.layers[0].id;
         }
-        setLabels(data.labels);
+        if (data.labels.length > 0) setLabels(data.labels);
+        if (data.customLayers && data.customLayers.length > 0) {
+          setCustomLayers(data.customLayers);
+        }
         setProject(data.project);
         setSharedMappings(data.sharedMappings);
         if (data.activeTable) setActiveTable(data.activeTable);
       }
-      if (firstLayerId) {
+      // Don't auto-open the layer panel during the tutorial — step 2 needs the
+      // user to click the layer card themselves.
+      if (firstLayerId && tutorialStep !== 1) {
         setActivePanel({ kind: "layer", layerId: firstLayerId });
       }
       setHydrated(true);
@@ -106,6 +135,7 @@ export default function App() {
       const payload = await serialize({
         layers,
         labels,
+        customLayers: customLayers.length > 0 ? customLayers : undefined,
         project,
         sharedMappings,
         activeTable,
@@ -119,7 +149,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, layers, labels, project, sharedMappings, activeTable]);
+  }, [hydrated, layers, labels, customLayers, project, sharedMappings, activeTable]);
 
   useEffect(() => {
     ggsql
@@ -153,9 +183,10 @@ export default function App() {
             columns,
             project,
             sharedMappings,
+            customLayers,
           )
         : null,
-    [activeTable, layers, labels, columns, project, sharedMappings],
+    [activeTable, layers, labels, customLayers, columns, project, sharedMappings],
   );
 
   const compatibleDrawsByLayerId = useMemo(() => {
@@ -163,7 +194,11 @@ export default function App() {
     for (const l of layers) {
       const xK = columnAxisKind(columns, l.mappings.x ?? sharedMappings.x);
       const yK = columnAxisKind(columns, l.mappings.y ?? sharedMappings.y);
-      map[l.id] = compatibleDraws(xK, yK);
+      const fillK = columnAxisKind(
+        columns,
+        l.mappings.fill ?? sharedMappings.fill,
+      );
+      map[l.id] = compatibleDraws(xK, yK, fillK);
     }
     return map;
   }, [layers, columns, sharedMappings]);
@@ -175,6 +210,38 @@ export default function App() {
     }
     return map;
   }, [layers, columns, sharedMappings]);
+
+  // Auto-reset settings when a layer's resolved draw shifts under it
+  // (e.g. scatter → bar after the user swaps the X column from continuous to
+  // discrete). Mirrors the explicit `onChangeDraw` reset for the implicit
+  // AUTO path. Only tracks non-null resolutions: briefly emptying mappings
+  // then re-adding them must NOT lose settings if the resolved draw is the
+  // same on both sides of the gap.
+  const prevResolvedRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const prev = prevResolvedRef.current;
+    const next = resolvedDrawByLayerId;
+    const changedIds: string[] = [];
+    const updated: Record<string, string> = { ...prev };
+    for (const [id, draw] of Object.entries(next)) {
+      if (draw === null) continue;
+      if (prev[id] !== undefined && prev[id] !== draw) changedIds.push(id);
+      updated[id] = draw;
+    }
+    prevResolvedRef.current = updated;
+    if (changedIds.length === 0) return;
+    setLayers((ls) => {
+      let mutated = false;
+      const out = ls.map((l) => {
+        if (changedIds.includes(l.id) && l.settings !== undefined) {
+          mutated = true;
+          return { ...l, settings: undefined };
+        }
+        return l;
+      });
+      return mutated ? out : ls;
+    });
+  }, [resolvedDrawByLayerId]);
 
   // Build + render chart whenever inputs change
   useEffect(() => {
@@ -215,22 +282,64 @@ export default function App() {
         };
         if (vizRef.current && !cancelled) {
           vizRef.current.innerHTML = "";
-          await vegaEmbed(vizRef.current, spec, {
+          const result = await vegaEmbed(vizRef.current, spec, {
             actions: { export: true, source: false, compiled: false, editor: false },
             renderer: "svg",
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             logger: logger as any,
           });
+          // Resize via Vega view signals. For non-faceted: set width/height.
+          // For faceted: set child_width/child_height (per-panel) divided by
+          // the panel count read from column_domain / row_domain.
+          const containerW = vizRef.current.clientWidth;
+          const containerH = vizRef.current.clientHeight;
+          const view = result.view;
+          const trySignal = (name: string, value: number) => {
+            try {
+              view.signal(name, value);
+            } catch {
+              /* signal absent for this spec shape */
+            }
+          };
+          // Vega-Lite's facet compiler emits "column_domain" / "row_domain"
+          // as datasets (length = panel count), not signals.
+          const tryReadDomainLen = (name: string): number => {
+            try {
+              const d = view.data(name);
+              return Array.isArray(d) && d.length > 0 ? d.length : 1;
+            } catch {
+              return 1;
+            }
+          };
+          const cols = tryReadDomainLen("column_domain");
+          const rows = tryReadDomainLen("row_domain");
+          const isFacet = cols > 1 || rows > 1;
+          if (isFacet) {
+            // Reserve space for outer axes + facet headers.
+            const childW = Math.max(
+              120,
+              Math.floor((containerW - 80) / cols) - 16,
+            );
+            const childH = Math.max(
+              120,
+              Math.floor((containerH - 80) / rows) - 16,
+            );
+            trySignal("child_width", childW);
+            trySignal("child_height", childH);
+          } else {
+            trySignal("width", containerW);
+            trySignal("height", containerH);
+          }
+          try {
+            await view.runAsync();
+          } catch {
+            /* ignore */
+          }
+          // Still cap the rendered SVG to fill the container; preserve aspect.
           const svg = vizRef.current.querySelector("svg");
           if (svg) {
-            const w = svg.getAttribute("width");
-            const h = svg.getAttribute("height");
-            if (w && h && !svg.getAttribute("viewBox")) {
-              svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-            }
             svg.setAttribute("width", "100%");
             svg.setAttribute("height", "100%");
-            svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
             svg.style.maxWidth = "100%";
             svg.style.maxHeight = "100%";
           }
@@ -257,13 +366,26 @@ export default function App() {
     try {
       ggsql.registerCsv(name, bytes);
       setActiveTable(name);
+      if (tutorialStep === 1) setTutorialStep(2);
     } catch (e) {
       setErrors((prev) => [`Failed to load CSV "${name}": ${e}`, ...prev]);
     }
   };
 
+  const onLoadPenguins = () => {
+    setActiveTable("ggsql:penguins");
+    if (tutorialStep === 1) setTutorialStep(2);
+  };
+
   const onChangeDraw = (id: string, draw: string) =>
-    setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, draw } : l)));
+    // Clear settings on geom switch — old values (e.g. bar's width, histogram's
+    // bins, smooth's method) rarely make sense for the new geom and would
+    // otherwise leak into the next query.
+    setLayers((ls) =>
+      ls.map((l) =>
+        l.id === id ? { ...l, draw, settings: undefined } : l,
+      ),
+    );
 
   const onChangeSettings = (id: string, settings: LayerSettings) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, settings } : l)));
@@ -276,6 +398,10 @@ export default function App() {
         delete next[aes];
         return next;
       });
+      if (col && tutorialStep === 3) {
+        markSeen();
+        setTutorialStep(null);
+      }
       return;
     }
     setLayers((ls) =>
@@ -290,6 +416,10 @@ export default function App() {
         return { ...l, draw, mappings };
       }),
     );
+    if (col && tutorialStep === 3) {
+      markSeen();
+      setTutorialStep(null);
+    }
   };
 
   const onDrop = (
@@ -313,6 +443,10 @@ export default function App() {
         return mappings === l.mappings ? l : { ...l, draw, mappings };
       }),
     );
+    if (tutorialStep === 3) {
+      markSeen();
+      setTutorialStep(null);
+    }
     setSharedMappings((cur) => {
       let next = cur;
       if (src && src.layerId === SHARED_MAPPINGS_KEY) {
@@ -331,6 +465,7 @@ export default function App() {
     setLayers((ls) => [...ls, layer]);
     setActivePanel({ kind: "layer", layerId: layer.id });
     setSecondaryPanel(null);
+    if (tutorialStep === 2) setTutorialStep(3);
   };
 
   const onToggleLayerDisabled = (id: string) => {
@@ -349,6 +484,7 @@ export default function App() {
     const layer = initialLayer();
     setLayers([layer]);
     setLabels([]);
+    setCustomLayers([]);
     setProject({});
     setSharedMappings({});
     setActivePanel({ kind: "layer", layerId: layer.id });
@@ -362,6 +498,11 @@ export default function App() {
       setLabels((arr) =>
         arr.map((l) =>
           l.position > idx ? { ...l, position: l.position - 1 } : l,
+        ),
+      );
+      setCustomLayers((arr) =>
+        arr.map((c) =>
+          c.position > idx ? { ...c, position: c.position - 1 } : c,
         ),
       );
       return ls.filter((l) => l.id !== id);
@@ -395,6 +536,35 @@ export default function App() {
     );
   };
 
+  const onAddCustom = () => {
+    const c = initialCustom(layers.length);
+    setCustomLayers((arr) => [...arr, c]);
+    setActivePanel({ kind: "custom", customId: c.id });
+    setSecondaryPanel(null);
+  };
+
+  const onUpdateCustom = (
+    customId: string,
+    patch: Partial<Pick<CustomLayer, "ggsql">>,
+  ) => {
+    setCustomLayers((arr) =>
+      arr.map((c) => (c.id === customId ? { ...c, ...patch } : c)),
+    );
+  };
+
+  const onRemoveCustom = (customId: string) => {
+    setCustomLayers((arr) => arr.filter((c) => c.id !== customId));
+    setActivePanel((p) =>
+      p?.kind === "custom" && p.customId === customId ? null : p,
+    );
+  };
+
+  const onToggleCustomDisabled = (id: string) => {
+    setCustomLayers((arr) =>
+      arr.map((c) => (c.id === id ? { ...c, disabled: !c.disabled } : c)),
+    );
+  };
+
   const onChangeFile = () => {
     setActiveTable(null);
     onResetConfig();
@@ -409,6 +579,14 @@ export default function App() {
     );
     setSecondaryPanel(null);
   };
+  const toggleCustomPanel = (customId: string) => {
+    setActivePanel((p) =>
+      p?.kind === "custom" && p.customId === customId
+        ? null
+        : { kind: "custom", customId },
+    );
+    setSecondaryPanel(null);
+  };
   const toggleSharedPanel = () => {
     setActivePanel((p) => (p?.kind === "shared" ? null : { kind: "shared" }));
     setSecondaryPanel(null);
@@ -420,6 +598,7 @@ export default function App() {
         : { kind: "layer", layerId },
     );
     setSecondaryPanel(null);
+    if (tutorialStep === 2) setTutorialStep(3);
   };
   const toggleMappingPanel = (aes: Aes) =>
     setSecondaryPanel((s) =>
@@ -435,7 +614,8 @@ export default function App() {
 
   const hasMappings =
     AESTHETICS.some((a) => sharedMappings[a]) ||
-    layers.some((l) => AESTHETICS.some((a) => l.mappings[a]));
+    layers.some((l) => AESTHETICS.some((a) => l.mappings[a])) ||
+    customLayers.some((c) => !c.disabled && c.ggsql.trim().length > 0);
   const isEmpty = !activeTable || !hasMappings;
 
   // Resolve which panel goes in the slot ----------------------------------
@@ -448,10 +628,13 @@ export default function App() {
     activePanel?.kind === "labels"
       ? labels.find((l) => l.id === activePanel.labelsId) ?? null
       : null;
-  const tutorialWrapperCls = "shrink-0 whitespace-nowrap pl-8 pt-px";
-
+  const activeCustom =
+    activePanel?.kind === "custom"
+      ? customLayers.find((c) => c.id === activePanel.customId) ?? null
+      : null;
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-chrome">
+      {tutorialStep !== null && <TutorialOverlay step={tutorialStep} />}
       <main className="relative flex min-h-0 flex-1">
         <div className="flex min-h-0 flex-1 p-2">
             <DataPanel
@@ -459,46 +642,58 @@ export default function App() {
               activeTable={activeTable}
               columns={columns}
               onLoadCsv={onLoadCsv}
-              onLoadPenguins={() => setActiveTable("ggsql:penguins")}
+              onLoadPenguins={onLoadPenguins}
               onChangeFile={onChangeFile}
             />
-            {!activeTable && (
-              <div className={tutorialWrapperCls}>
-                <Tutorial step1Done={!!activeTable} />
-              </div>
-            )}
             {activeTable && (
               <div
                 key={activeTable}
                 className="flex animate-slide-in-left"
               >
-                <div className="relative flex">
+                <div className="relative isolate flex">
                 <BuildPanel
                   layers={layers}
                   labels={labels}
+                  customLayers={customLayers}
                   activeLayerId={panelLayerId}
                   activeLabelsId={
                     activePanel?.kind === "labels"
                       ? activePanel.labelsId
                       : null
                   }
+                  activeCustomId={
+                    activePanel?.kind === "custom"
+                      ? activePanel.customId
+                      : null
+                  }
                   sharedOpen={activePanel?.kind === "shared"}
                   resolvedDrawByLayerId={resolvedDrawByLayerId}
                   onToggleLayer={toggleLayerPanel}
                   onToggleLabels={toggleLabelsPanel}
+                  onToggleCustom={toggleCustomPanel}
                   onToggleShared={toggleSharedPanel}
                   onAddLayer={onAddLayer}
                   onAddLabels={onAddLabels}
+                  onAddCustom={onAddCustom}
                   onRemoveLayer={onRemoveLayer}
                   onRemoveLabels={onRemoveLabels}
+                  onRemoveCustom={onRemoveCustom}
                   onToggleLayerDisabled={onToggleLayerDisabled}
                   onToggleLabelsDisabled={onToggleLabelsDisabled}
+                  onToggleCustomDisabled={onToggleCustomDisabled}
                 />
                 {activeLabels && activePanel?.kind === "labels" ? (
                   <LabelsPanel
                     labels={activeLabels}
                     onChange={(patch) =>
                       onUpdateLabels(activePanel.labelsId, patch)
+                    }
+                  />
+                ) : activeCustom && activePanel?.kind === "custom" ? (
+                  <CustomPanel
+                    custom={activeCustom}
+                    onChange={(patch) =>
+                      onUpdateCustom(activePanel.customId, patch)
                     }
                   />
                 ) : activePanel?.kind === "shared" ? (
@@ -530,11 +725,6 @@ export default function App() {
                 ) : (
                   <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
                 )}
-                {!hasMappings && (
-                  <div className={`absolute left-full top-0 z-10 ${tutorialWrapperCls}`}>
-                    <Tutorial step1Done={!!activeTable} />
-                  </div>
-                )}
                 </div>
                 {secondaryPanel?.kind === "settings" && panelLayer ? (
                   <ChartTypePanel
@@ -560,6 +750,11 @@ export default function App() {
                   <MappingPanel
                     aes={secondaryPanel.aes}
                     settings={panelLayer.settings ?? {}}
+                    mappingKind={resolveMappingKind(
+                      panelLayer.mappings[secondaryPanel.aes] ??
+                        sharedMappings[secondaryPanel.aes],
+                      columns,
+                    )}
                     onChangeSettings={(s) =>
                       onChangeSettings(panelLayer.id, s)
                     }

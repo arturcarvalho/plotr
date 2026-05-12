@@ -43,6 +43,7 @@ export function LabelsPanel({ labels, onChange }: Props) {
           />
           <Input
             label="Subtitle"
+            description="Only shown when title is set"
             value={labels.subtitle ?? ""}
             onChange={(v) => onChange({ subtitle: v || undefined })}
           />
@@ -72,10 +73,12 @@ export function LabelsPanel({ labels, onChange }: Props) {
 
 function Input({
   label,
+  description,
   value,
   onChange,
 }: {
   label: string;
+  description?: string;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -90,6 +93,11 @@ function Input({
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
       />
+      {description && (
+        <span className="mt-1 block font-mono text-[10px] text-stone-500">
+          {description}
+        </span>
+      )}
     </label>
   );
 }

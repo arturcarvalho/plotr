@@ -5,6 +5,12 @@ import { Dropzone } from "./Dropzone";
 interface Props {
   mappings: Partial<Record<Aes, string>>;
   sourceId: string;
+  /** Resolved draw of the owning layer; when omitted (e.g. shared mappings),
+   *  geom-conditional rows are hidden. */
+  resolvedDraw?: string | null;
+  /** Aesthetics that the resolved geom requires but the layer hasn't mapped.
+   *  Those dropzones render with an amber-dashed border as a visual hint. */
+  missingRequired?: readonly Aes[];
   openMappingAes?: Aes | null;
   onMap: (aes: Aes, col: string | undefined) => void;
   onDrop: (
@@ -18,15 +24,21 @@ interface Props {
 export function MappingFields({
   mappings,
   sourceId,
+  resolvedDraw,
+  missingRequired,
   openMappingAes,
   onMap,
   onDrop,
   onToggleSettings,
 }: Props) {
+  const isMissing = (aes: Aes) =>
+    missingRequired ? missingRequired.includes(aes) : false;
+
   const dropzoneFor = (aes: Aes, placeholder?: string) => (
     <Dropzone
       placeholder={placeholder}
       value={mappings[aes]}
+      required={isMissing(aes)}
       source={{ layerId: sourceId, aes }}
       onDrop={(c, src) => onDrop(aes, c, src)}
       onClear={() => onMap(aes, undefined)}
@@ -46,12 +58,29 @@ export function MappingFields({
 
   return (
     <div className="space-y-3">
-      <Field label="X">{row("x", "Bottom Axis")}</Field>
+      <div data-tutorial-target="mappings">
+        <Field label="X">{row("x", "Bottom Axis")}</Field>
+      </div>
       <Field label="Y">{row("y", "Left Axis")}</Field>
-      <Field label="Fill">{row("fill")}</Field>
-      <Field label="Stroke">{row("stroke")}</Field>
+      {(resolvedDraw === "ribbon" || resolvedDraw === "range") && (
+        <>
+          <Field label="Y min" missing={isMissing("ymin")}>
+            {row("ymin", "Lower bound")}
+          </Field>
+          <Field label="Y max" missing={isMissing("ymax")}>
+            {row("ymax", "Upper bound")}
+          </Field>
+        </>
+      )}
+      <Field label="Fill color">{row("fill")}</Field>
+      <Field label="Line color">{row("stroke")}</Field>
       <Field label="Opacity">{row("opacity")}</Field>
       <Field label="Size">{row("size")}</Field>
+      {resolvedDraw === "text" && (
+        <Field label="Label" missing={isMissing("label")}>
+          {row("label", "Text content")}
+        </Field>
+      )}
       <Field label="Panels">
         <div className="space-y-1">
           {row("facet_row", "rows")}
@@ -65,11 +94,24 @@ export function MappingFields({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  missing,
+  children,
+}: {
+  label: string;
+  /** Renders a muted `(missing)` suffix in amber when this dropzone's
+   *  aesthetic is required by the geom but not mapped. */
+  missing?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div>
       <div className="mb-1 font-mono text-xs font-semibold text-stone-700">
         {label}
+        {missing && (
+          <span className="ml-1 font-normal text-amber-500">(missing)</span>
+        )}
       </div>
       {children}
     </div>

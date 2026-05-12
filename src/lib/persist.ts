@@ -4,6 +4,7 @@ import {
   DRAW_TYPES,
   FACETS,
   type Aes,
+  type CustomLayer,
   type LabelsLayer,
   type Layer,
   type LayerSettings,
@@ -13,6 +14,8 @@ import {
 export interface Persisted {
   layers: Layer[];
   labels: LabelsLayer[];
+  /** Optional. Omitted when there are no custom layers, for shorter URL hashes. */
+  customLayers?: CustomLayer[];
   project: ProjectSettings;
   sharedMappings: Partial<Record<Aes, string>>;
   /** Built-in (ggsql:*) table name only. User CSV tables are not persisted. */
@@ -53,10 +56,33 @@ interface ShortLayerSettings {
   pos?: string;
   f?: string;
   k?: string;
+  lw?: number;
+  or?: string;
+  bw?: number;
+  adj?: number;
+  krn?: string;
+  mth?: string;
+  sd?: string;
+  tl?: number;
+  bn?: number;
+  bnw?: number;
+  cl?: string;
+  ot?: boolean;
+  cf?: number;
+  it?: boolean;
+  hj?: number;
+  vj?: number;
+  rt?: number;
+  fmt?: string;
+  slp?: number;
   o?: number;
   z?: number;
   nf?: true;
   ns?: true;
+  fpd?: string;
+  fpc?: string;
+  kpd?: string;
+  kpc?: string;
 }
 interface ShortLabels {
   i: string;
@@ -69,6 +95,12 @@ interface ShortLabels {
   // Note: `x` is already the X-axis label; `dx` carries the disabled flag.
   dx?: true;
 }
+interface ShortCustom {
+  i: string;
+  g: string;
+  p: number;
+  x?: true;
+}
 interface ShortProject {
   r?: number;
   c?: false;
@@ -77,6 +109,7 @@ interface Payload {
   v: number;
   L?: ShortLayer[];
   B?: ShortLabels[];
+  C?: ShortCustom[];
   P?: ShortProject;
   S?: Partial<Record<Aes, string>>;
   t?: string;
@@ -102,10 +135,42 @@ function encodeLayerSettings(
   if (typeof s.position === "string") out.pos = s.position;
   if (isNonEmptyString(s.fill)) out.f = s.fill;
   if (isNonEmptyString(s.stroke)) out.k = s.stroke;
+  if (typeof s.linewidth === "number" && !Number.isNaN(s.linewidth))
+    out.lw = s.linewidth;
+  if (typeof s.orientation === "string") out.or = s.orientation;
+  if (typeof s.bandwidth === "number" && !Number.isNaN(s.bandwidth))
+    out.bw = s.bandwidth;
+  if (typeof s.adjust === "number" && !Number.isNaN(s.adjust))
+    out.adj = s.adjust;
+  if (typeof s.kernel === "string") out.krn = s.kernel;
+  if (typeof s.method === "string") out.mth = s.method;
+  if (typeof s.side === "string") out.sd = s.side;
+  if (typeof s.tails === "number" && !Number.isNaN(s.tails)) out.tl = s.tails;
+  if (typeof s.bins === "number" && !Number.isNaN(s.bins)) out.bn = s.bins;
+  if (typeof s.binwidth === "number" && !Number.isNaN(s.binwidth))
+    out.bnw = s.binwidth;
+  if (typeof s.closed === "string") out.cl = s.closed;
+  if (typeof s.outliers === "boolean") out.ot = s.outliers;
+  if (typeof s.coef === "number" && !Number.isNaN(s.coef)) out.cf = s.coef;
+  if (typeof s.italic === "boolean") out.it = s.italic;
+  if (typeof s.hjust === "number" && !Number.isNaN(s.hjust)) out.hj = s.hjust;
+  if (typeof s.vjust === "number" && !Number.isNaN(s.vjust)) out.vj = s.vjust;
+  if (typeof s.rotation === "number" && !Number.isNaN(s.rotation))
+    out.rt = s.rotation;
+  if (typeof s.format === "string" && s.format.length > 0) out.fmt = s.format;
+  if (typeof s.slope === "number" && !Number.isNaN(s.slope))
+    out.slp = s.slope;
   if (typeof s.opacity === "number" && !Number.isNaN(s.opacity)) out.o = s.opacity;
   if (typeof s.size === "number" && !Number.isNaN(s.size)) out.z = s.size;
   if (s.noFill === true) out.nf = true;
   if (s.noStroke === true) out.ns = true;
+  if (isNonEmptyString(s.fillPaletteDiscrete)) out.fpd = s.fillPaletteDiscrete;
+  if (isNonEmptyString(s.fillPaletteContinuous))
+    out.fpc = s.fillPaletteContinuous;
+  if (isNonEmptyString(s.strokePaletteDiscrete))
+    out.kpd = s.strokePaletteDiscrete;
+  if (isNonEmptyString(s.strokePaletteContinuous))
+    out.kpc = s.strokePaletteContinuous;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -118,6 +183,12 @@ function encodeLayer(l: Layer): ShortLayer {
   const settings = encodeLayerSettings(l.settings);
   if (settings) out.s = settings;
   if (l.disabled === true) out.x = true;
+  return out;
+}
+
+function encodeCustom(c: CustomLayer): ShortCustom {
+  const out: ShortCustom = { i: c.id, g: c.ggsql, p: c.position };
+  if (c.disabled === true) out.x = true;
   return out;
 }
 
@@ -165,10 +236,43 @@ function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
   }
   if (typeof r.f === "string") out.fill = r.f;
   if (typeof r.k === "string") out.stroke = r.k;
+  if (typeof r.lw === "number" && !Number.isNaN(r.lw)) out.linewidth = r.lw;
+  if (typeof r.or === "string") {
+    out.orientation = r.or as LayerSettings["orientation"];
+  }
+  if (typeof r.bw === "number" && !Number.isNaN(r.bw)) out.bandwidth = r.bw;
+  if (typeof r.adj === "number" && !Number.isNaN(r.adj)) out.adjust = r.adj;
+  if (typeof r.krn === "string") {
+    out.kernel = r.krn as LayerSettings["kernel"];
+  }
+  if (typeof r.mth === "string") {
+    out.method = r.mth as LayerSettings["method"];
+  }
+  if (typeof r.sd === "string") {
+    out.side = r.sd as LayerSettings["side"];
+  }
+  if (typeof r.tl === "number" && !Number.isNaN(r.tl)) out.tails = r.tl;
+  if (typeof r.bn === "number" && !Number.isNaN(r.bn)) out.bins = r.bn;
+  if (typeof r.bnw === "number" && !Number.isNaN(r.bnw)) out.binwidth = r.bnw;
+  if (typeof r.cl === "string") {
+    out.closed = r.cl as LayerSettings["closed"];
+  }
+  if (typeof r.ot === "boolean") out.outliers = r.ot;
+  if (typeof r.cf === "number" && !Number.isNaN(r.cf)) out.coef = r.cf;
+  if (typeof r.it === "boolean") out.italic = r.it;
+  if (typeof r.hj === "number" && !Number.isNaN(r.hj)) out.hjust = r.hj;
+  if (typeof r.vj === "number" && !Number.isNaN(r.vj)) out.vjust = r.vj;
+  if (typeof r.rt === "number" && !Number.isNaN(r.rt)) out.rotation = r.rt;
+  if (typeof r.fmt === "string") out.format = r.fmt;
+  if (typeof r.slp === "number" && !Number.isNaN(r.slp)) out.slope = r.slp;
   if (typeof r.o === "number" && !Number.isNaN(r.o)) out.opacity = r.o;
   if (typeof r.z === "number" && !Number.isNaN(r.z)) out.size = r.z;
   if (r.nf === true) out.noFill = true;
   if (r.ns === true) out.noStroke = true;
+  if (typeof r.fpd === "string") out.fillPaletteDiscrete = r.fpd;
+  if (typeof r.fpc === "string") out.fillPaletteContinuous = r.fpc;
+  if (typeof r.kpd === "string") out.strokePaletteDiscrete = r.kpd;
+  if (typeof r.kpc === "string") out.strokePaletteContinuous = r.kpc;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -190,6 +294,21 @@ function decodeLayer(raw: unknown): Layer | null {
   const out: Layer = { id, draw: r.d, mappings };
   const settings = decodeLayerSettings(r.s);
   if (settings) out.settings = settings;
+  if (r.x === true) out.disabled = true;
+  return out;
+}
+
+function decodeCustom(raw: unknown): CustomLayer | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.g !== "string") return null;
+  if (typeof r.p !== "number" || !Number.isInteger(r.p)) return null;
+  const id = isNonEmptyString(r.i) ? r.i : newId();
+  const out: CustomLayer = {
+    id,
+    ggsql: r.g,
+    position: Math.max(0, r.p),
+  };
   if (r.x === true) out.disabled = true;
   return out;
 }
@@ -271,6 +390,9 @@ export async function serialize(p: Persisted): Promise<string> {
   if (p.layers.length > 0) payload.L = p.layers.map(encodeLayer);
   const labels = p.labels.map(encodeLabels);
   if (labels.length > 0) payload.B = labels;
+  if (p.customLayers && p.customLayers.length > 0) {
+    payload.C = p.customLayers.map(encodeCustom);
+  }
   const project = encodeProject(p.project);
   if (Object.keys(project).length > 0) payload.P = project;
   const shared = encodeMappings(p.sharedMappings);
@@ -313,6 +435,7 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
   const obj = parsed as {
     L?: unknown;
     B?: unknown;
+    C?: unknown;
     P?: unknown;
     S?: unknown;
     t?: unknown;
@@ -327,7 +450,12 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
         .map(decodeLabels)
         .filter((l): l is LabelsLayer => l !== null)
     : [];
-  return {
+  const customLayers = Array.isArray(obj.C)
+    ? obj.C
+        .map(decodeCustom)
+        .filter((c): c is CustomLayer => c !== null)
+    : undefined;
+  const out: Persisted = {
     layers,
     labels,
     project: decodeProject(obj.P),
@@ -337,4 +465,8 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
         ? obj.t
         : null,
   };
+  if (customLayers && customLayers.length > 0) {
+    out.customLayers = customLayers;
+  }
+  return out;
 }

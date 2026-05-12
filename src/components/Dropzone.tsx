@@ -12,6 +12,9 @@ interface Source {
 interface Props {
   placeholder?: string;
   value?: string;
+  /** Marks this dropzone as a geom-required aesthetic that's missing — when
+   *  true AND empty, the border switches to amber-dashed as a visual hint. */
+  required?: boolean;
   source: Source;
   onDrop: (col: string, src?: Source) => void;
   onClear: () => void;
@@ -20,6 +23,7 @@ interface Props {
 export function Dropzone({
   placeholder,
   value,
+  required,
   source,
   onDrop,
   onClear,
@@ -62,7 +66,11 @@ export function Dropzone({
       }}
       className={[
         "flex h-9 w-full items-center gap-1 rounded border-2 border-dashed bg-white px-2 transition-colors",
-        over ? "border-sky-400 bg-sky-50" : "border-stone-300",
+        over
+          ? "border-sky-400 bg-sky-50"
+          : required && !value
+            ? "border-amber-500"
+            : "border-stone-300",
       ].join(" ")}
     >
       {value ? (
