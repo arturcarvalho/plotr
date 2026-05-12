@@ -63,6 +63,175 @@ const SMOOTH_METHODS: SmoothMethod[] = [
   "tls",
 ];
 
+// ────────────────────────────────────────────────────────────────────────────
+// Per-geom defaults for cross-geom fields. Keep all defaultLabel values in one
+// place so they're easy to audit against GGSQL_DEFAULTS.md.
+// ────────────────────────────────────────────────────────────────────────────
+
+const LINEWIDTH_DEFAULT_BY_GEOM: Record<string, string> = {
+  point: "1.0",
+  line: "1.5",
+  tile: "1.0",
+  violin: "1.0",
+  boxplot: "1.0",
+  density: "1.0",
+  area: "1.0",
+  smooth: "2.0",
+  ribbon: "1.0",
+  range: "1.0",
+  rule: "1.0",
+};
+
+const POSITION_DEFAULT_BY_GEOM: Record<string, string> = {
+  bar: "stack",
+  point: "identity",
+  tile: "identity",
+  violin: "dodge",
+  boxplot: "dodge",
+  density: "identity",
+  area: "stack",
+  smooth: "identity",
+  ribbon: "identity",
+  range: "identity",
+  text: "identity",
+  histogram: "stack",
+};
+
+// Most geoms accept the full POSITIONS set; point is curated to the only two
+// that make geometric sense.
+const POSITION_OPTIONS_BY_GEOM: Record<string, Position[]> = {
+  point: POINT_POSITIONS,
+};
+
+interface WidthConfig {
+  defaultLabel: string;
+  min: number;
+  max: number;
+  step: number;
+}
+const WIDTH_CONFIG_BY_GEOM: Record<string, WidthConfig> = {
+  bar: { defaultLabel: "0.9", min: 0, max: 1, step: 0.05 },
+  violin: { defaultLabel: "0.9", min: 0, max: 1, step: 0.05 },
+  boxplot: { defaultLabel: "0.9", min: 0, max: 1, step: 0.05 },
+  range: { defaultLabel: "10.0", min: 0, max: 50, step: 0.5 },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Cross-geom field wrappers. Each one resolves per-geom defaults from the maps
+// above so the per-geom blocks below stay one-liners.
+// ────────────────────────────────────────────────────────────────────────────
+
+interface FieldProps {
+  geom: string;
+  settings: LayerSettings;
+  onChange: (next: LayerSettings) => void;
+}
+
+function LinewidthSlider({ geom, settings, onChange }: FieldProps) {
+  return (
+    <NumberSliderField
+      label="Linewidth"
+      value={settings.linewidth ?? null}
+      defaultLabel={LINEWIDTH_DEFAULT_BY_GEOM[geom]}
+      min={0}
+      max={5}
+      step={0.1}
+      onChange={(v) => onChange({ ...settings, linewidth: v ?? undefined })}
+    />
+  );
+}
+
+function PositionRadio({ geom, settings, onChange }: FieldProps) {
+  const options = POSITION_OPTIONS_BY_GEOM[geom] ?? POSITIONS;
+  return (
+    <RadioField
+      label="Position"
+      value={settings.position ?? null}
+      defaultLabel={POSITION_DEFAULT_BY_GEOM[geom]}
+      options={options}
+      onChange={(v) => onChange({ ...settings, position: v ?? undefined })}
+    />
+  );
+}
+
+function WidthSlider({ geom, settings, onChange }: FieldProps) {
+  const cfg = WIDTH_CONFIG_BY_GEOM[geom];
+  if (!cfg) return null;
+  return (
+    <NumberSliderField
+      label="Width"
+      value={settings.width ?? null}
+      defaultLabel={cfg.defaultLabel}
+      min={cfg.min}
+      max={cfg.max}
+      step={cfg.step}
+      onChange={(v) => onChange({ ...settings, width: v ?? undefined })}
+    />
+  );
+}
+
+function OrientationRadio({
+  settings,
+  onChange,
+}: Omit<FieldProps, "geom">) {
+  return (
+    <RadioField
+      label="Orientation"
+      value={settings.orientation ?? null}
+      defaultLabel="aligned"
+      options={ORIENTATIONS}
+      onChange={(v) => onChange({ ...settings, orientation: v ?? undefined })}
+    />
+  );
+}
+
+function BandwidthInput({
+  settings,
+  onChange,
+}: Omit<FieldProps, "geom">) {
+  return (
+    <NumberInputField
+      label="Bandwidth"
+      value={settings.bandwidth ?? null}
+      min={0}
+      step={0.05}
+      onChange={(v) => onChange({ ...settings, bandwidth: v ?? undefined })}
+    />
+  );
+}
+
+function AdjustSlider({
+  settings,
+  onChange,
+}: Omit<FieldProps, "geom">) {
+  return (
+    <NumberSliderField
+      label="Adjust"
+      value={settings.adjust ?? null}
+      defaultLabel="1.0"
+      min={0.1}
+      max={3}
+      step={0.1}
+      onChange={(v) => onChange({ ...settings, adjust: v ?? undefined })}
+    />
+  );
+}
+
+function KernelDropdown({
+  settings,
+  onChange,
+}: Omit<FieldProps, "geom">) {
+  return (
+    <PreviewSelectField
+      label="Kernel"
+      value={settings.kernel ?? null}
+      defaultLabel="gaussian"
+      options={KERNELS}
+      onChange={(v) => onChange({ ...settings, kernel: v ?? undefined })}
+    />
+  );
+}
+
 export function ChartTypePanel({
   resolvedDraw,
   compatibleDraws,
@@ -141,177 +310,36 @@ export function ChartTypePanel({
             </div>
             {effective === "bar" && (
               <>
-                <NumberSliderField
-                  label="Width"
-                  value={settings.width ?? null}
-                  defaultLabel="0.9"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, width: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="stack"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({
-                      ...settings,
-                      position: v ?? undefined,
-                    })
-                  }
-                />
+                <WidthSlider geom="bar" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="bar" settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "point" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="identity"
-                  options={POINT_POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({
-                      ...settings,
-                      position: v ?? undefined,
-                    })
-                  }
-                />
+                <LinewidthSlider geom="point" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="point" settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "line" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.5"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Orientation"
-                  value={settings.orientation ?? null}
-                  defaultLabel="aligned"
-                  options={ORIENTATIONS}
-                  onChange={(v) =>
-                    onChangeSettings({
-                      ...settings,
-                      orientation: v ?? undefined,
-                    })
-                  }
-                />
+                <LinewidthSlider geom="line" settings={settings} onChange={onChangeSettings} />
+                <OrientationRadio settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "tile" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="identity"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({
-                      ...settings,
-                      position: v ?? undefined,
-                    })
-                  }
-                />
+                <LinewidthSlider geom="tile" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="tile" settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "violin" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="dodge"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({
-                      ...settings,
-                      position: v ?? undefined,
-                    })
-                  }
-                />
-                <NumberSliderField
-                  label="Width"
-                  value={settings.width ?? null}
-                  defaultLabel="0.9"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, width: v ?? undefined })
-                  }
-                />
-                <NumberInputField
-                  label="Bandwidth"
-                  value={settings.bandwidth ?? null}
-                  min={0}
-                  step={0.05}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, bandwidth: v ?? undefined })
-                  }
-                />
-                <NumberSliderField
-                  label="Adjust"
-                  value={settings.adjust ?? null}
-                  defaultLabel="1.0"
-                  min={0.1}
-                  max={3}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, adjust: v ?? undefined })
-                  }
-                />
-                <PreviewSelectField
-                  label="Kernel"
-                  value={settings.kernel ?? null}
-                  defaultLabel="gaussian"
-                  options={KERNELS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, kernel: v ?? undefined })
-                  }
-                />
+                <LinewidthSlider geom="violin" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="violin" settings={settings} onChange={onChangeSettings} />
+                <WidthSlider geom="violin" settings={settings} onChange={onChangeSettings} />
+                <BandwidthInput settings={settings} onChange={onChangeSettings} />
+                <AdjustSlider settings={settings} onChange={onChangeSettings} />
+                <KernelDropdown settings={settings} onChange={onChangeSettings} />
                 <RadioField
                   label="Side"
                   value={settings.side ?? null}
@@ -342,85 +370,21 @@ export function ChartTypePanel({
             )}
             {effective === "range" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="identity"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, position: v ?? undefined })
-                  }
-                />
-                <NumberSliderField
-                  label="Width"
-                  value={settings.width ?? null}
-                  defaultLabel="10.0"
-                  min={0}
-                  max={50}
-                  step={0.5}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, width: v ?? undefined })
-                  }
-                />
+                <LinewidthSlider geom="range" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="range" settings={settings} onChange={onChangeSettings} />
+                <WidthSlider geom="range" settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "ribbon" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="identity"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, position: v ?? undefined })
-                  }
-                />
+                <LinewidthSlider geom="ribbon" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="ribbon" settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "smooth" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="2.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="identity"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, position: v ?? undefined })
-                  }
-                />
+                <LinewidthSlider geom="smooth" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="smooth" settings={settings} onChange={onChangeSettings} />
                 <PreviewSelectField
                   label="Method"
                   value={settings.method ?? null}
@@ -430,159 +394,32 @@ export function ChartTypePanel({
                     onChangeSettings({ ...settings, method: v ?? undefined })
                   }
                 />
-                <NumberInputField
-                  label="Bandwidth"
-                  value={settings.bandwidth ?? null}
-                  min={0}
-                  step={0.05}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, bandwidth: v ?? undefined })
-                  }
-                />
-                <NumberSliderField
-                  label="Adjust"
-                  value={settings.adjust ?? null}
-                  defaultLabel="1.0"
-                  min={0.1}
-                  max={3}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, adjust: v ?? undefined })
-                  }
-                />
-                <PreviewSelectField
-                  label="Kernel"
-                  value={settings.kernel ?? null}
-                  defaultLabel="gaussian"
-                  options={KERNELS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, kernel: v ?? undefined })
-                  }
-                />
+                <BandwidthInput settings={settings} onChange={onChangeSettings} />
+                <AdjustSlider settings={settings} onChange={onChangeSettings} />
+                <KernelDropdown settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "area" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="stack"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, position: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Orientation"
-                  value={settings.orientation ?? null}
-                  defaultLabel="aligned"
-                  options={ORIENTATIONS}
-                  onChange={(v) =>
-                    onChangeSettings({
-                      ...settings,
-                      orientation: v ?? undefined,
-                    })
-                  }
-                />
+                <LinewidthSlider geom="area" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="area" settings={settings} onChange={onChangeSettings} />
+                <OrientationRadio settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "density" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="identity"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, position: v ?? undefined })
-                  }
-                />
-                <NumberInputField
-                  label="Bandwidth"
-                  value={settings.bandwidth ?? null}
-                  min={0}
-                  step={0.05}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, bandwidth: v ?? undefined })
-                  }
-                />
-                <NumberSliderField
-                  label="Adjust"
-                  value={settings.adjust ?? null}
-                  defaultLabel="1.0"
-                  min={0.1}
-                  max={3}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, adjust: v ?? undefined })
-                  }
-                />
-                <PreviewSelectField
-                  label="Kernel"
-                  value={settings.kernel ?? null}
-                  defaultLabel="gaussian"
-                  options={KERNELS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, kernel: v ?? undefined })
-                  }
-                />
+                <LinewidthSlider geom="density" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="density" settings={settings} onChange={onChangeSettings} />
+                <BandwidthInput settings={settings} onChange={onChangeSettings} />
+                <AdjustSlider settings={settings} onChange={onChangeSettings} />
+                <KernelDropdown settings={settings} onChange={onChangeSettings} />
               </>
             )}
             {effective === "boxplot" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="dodge"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, position: v ?? undefined })
-                  }
-                />
-                <NumberSliderField
-                  label="Width"
-                  value={settings.width ?? null}
-                  defaultLabel="0.9"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, width: v ?? undefined })
-                  }
-                />
+                <LinewidthSlider geom="boxplot" settings={settings} onChange={onChangeSettings} />
+                <PositionRadio geom="boxplot" settings={settings} onChange={onChangeSettings} />
+                <WidthSlider geom="boxplot" settings={settings} onChange={onChangeSettings} />
                 <RadioField<"true" | "false">
                   label="Outliers"
                   value={
@@ -616,17 +453,7 @@ export function ChartTypePanel({
             )}
             {effective === "rule" && (
               <>
-                <NumberSliderField
-                  label="Linewidth"
-                  value={settings.linewidth ?? null}
-                  defaultLabel="1.0"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, linewidth: v ?? undefined })
-                  }
-                />
+                <LinewidthSlider geom="rule" settings={settings} onChange={onChangeSettings} />
                 <NumberSliderField
                   label="Slope"
                   value={settings.slope ?? null}
@@ -645,15 +472,7 @@ export function ChartTypePanel({
             )}
             {effective === "text" && (
               <>
-                <RadioField
-                  label="Position"
-                  value={settings.position ?? null}
-                  defaultLabel="identity"
-                  options={POSITIONS}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, position: v ?? undefined })
-                  }
-                />
+                <PositionRadio geom="text" settings={settings} onChange={onChangeSettings} />
                 <RadioField<"true" | "false">
                   label="Italic"
                   value={
@@ -1273,15 +1092,7 @@ function HistogramBlock({
   };
   return (
     <>
-      <RadioField
-        label="Position"
-        value={settings.position ?? null}
-        defaultLabel="stack"
-        options={POSITIONS}
-        onChange={(v) =>
-          onChangeSettings({ ...settings, position: v ?? undefined })
-        }
-      />
+      <PositionRadio geom="histogram" settings={settings} onChange={onChangeSettings} />
       <div>
         <div className="mb-1 font-mono text-xs text-stone-700">Bin by</div>
         <div className="flex flex-wrap gap-1">
