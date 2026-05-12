@@ -478,7 +478,7 @@ describe("buildQuery emits per-layer SETTING", () => {
         {
           id: "L",
           draw: "ribbon",
-          mappings: { x: "bill_len", y: "bill_dep" },
+          mappings: { x: "bill_len", ymin: "bill_dep", ymax: "bill_len" },
           settings: { position: "identity", linewidth: 0.5 },
         },
       ],
@@ -486,7 +486,7 @@ describe("buildQuery emits per-layer SETTING", () => {
       COLS,
     );
     expect(q).toContain(
-      "DRAW ribbon MAPPING bill_len AS x, bill_dep AS y SETTING position => 'identity', linewidth => 0.5",
+      "DRAW ribbon MAPPING bill_len AS x, bill_dep AS ymin, bill_len AS ymax SETTING position => 'identity', linewidth => 0.5",
     );
   });
 
@@ -826,6 +826,53 @@ describe("ymin / ymax aesthetics (ribbon only)", () => {
     );
     expect(q).toContain("bill_dep AS ymin");
     expect(q).toContain("bill_len AS ymax");
+  });
+
+  it("does NOT emit y for ribbon even when mapped (ggsql rejects it)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "ribbon",
+          mappings: {
+            x: "bill_len",
+            y: "bill_dep",
+            ymin: "bill_dep",
+            ymax: "bill_len",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("bill_len AS x");
+    expect(q).toContain("AS ymin");
+    expect(q).toContain("AS ymax");
+    expect(q).not.toContain("AS y,");
+    expect(q).not.toContain("AS y\n");
+    expect(q).not.toMatch(/AS y$/m);
+  });
+
+  it("does NOT emit y for range even when mapped (ggsql rejects it)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "range",
+          mappings: {
+            x: "bill_len",
+            y: "bill_dep",
+            ymin: "bill_dep",
+            ymax: "bill_len",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toMatch(/AS y[\s,]/);
   });
 
   it("does NOT emit ymin / ymax for non-ribbon geom", () => {

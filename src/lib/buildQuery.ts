@@ -308,6 +308,10 @@ export function buildQuery(
         draw !== "range"
       )
         return false;
+      // ribbon + range take pos2min/pos2max for the secondary axis — plain
+      // `y` is NOT in their `aesthetics()` list, so ggsql's validate_mapping
+      // errors on it. Drop a stale `y` mapping rather than pass through.
+      if (a === "y" && (draw === "ribbon" || draw === "range")) return false;
       return true;
     }).map((a) => `${l.mappings[a]} AS ${a}`);
     const mappingClause = dataMaps.length

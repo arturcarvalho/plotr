@@ -1248,15 +1248,23 @@ function HistogramBlock({
   settings: LayerSettings;
   onChangeSettings: (next: LayerSettings) => void;
 }) {
-  // Toggle state lives locally so picking "width" sticks even before the user
-  // enters a binwidth value. Initial value derived from settings so URL-hash
-  // hydration lands on the correct strategy on first paint.
-  const [binStrategy, setBinStrategy] = useState<"count" | "width">(() =>
-    settings.binwidth !== undefined ? "width" : "count",
+  // When one of the bin keys is set, the strategy is unambiguous and tracks
+  // settings every render — so switching to another histogram layer reflects
+  // that layer's state. When both are unset the toggle would have no anchor,
+  // so a sticky local choice keeps "width" picked even before a value is typed.
+  const derived: "count" | "width" | null =
+    settings.binwidth !== undefined
+      ? "width"
+      : settings.bins !== undefined
+        ? "count"
+        : null;
+  const [stickyStrategy, setStickyStrategy] = useState<"count" | "width">(
+    "count",
   );
+  const binStrategy = derived ?? stickyStrategy;
   const pickStrategy = (next: "count" | "width") => {
     if (next === binStrategy) return;
-    setBinStrategy(next);
+    setStickyStrategy(next);
     if (next === "width") {
       onChangeSettings({ ...settings, bins: undefined });
     } else {
