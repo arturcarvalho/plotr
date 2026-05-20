@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildQuery,
   CHART_LABELS,
+  computeMissingRequired,
   DRAW_TYPES,
   type CustomLayer,
   type Layer,
@@ -1580,5 +1581,61 @@ describe("DRAW_TYPES order is locked", () => {
     for (const t of DRAW_TYPES) {
       expect(CHART_LABELS[t]).toBeDefined();
     }
+  });
+});
+
+describe("computeMissingRequired", () => {
+  it("text with label mapped → no missing", () => {
+    expect(
+      computeMissingRequired("text", { x: "a", y: "b", label: "c" }),
+    ).toEqual([]);
+  });
+
+  it("text without label → [label]", () => {
+    expect(computeMissingRequired("text", { x: "a", y: "b" })).toEqual([
+      "label",
+    ]);
+  });
+
+  it("text with label empty string treated as missing", () => {
+    expect(
+      computeMissingRequired("text", { x: "a", y: "b", label: "" }),
+    ).toEqual(["label"]);
+  });
+
+  it("ribbon with ymin set, ymax unset → [ymax]", () => {
+    expect(computeMissingRequired("ribbon", { x: "a", ymin: "lo" })).toEqual([
+      "ymax",
+    ]);
+  });
+
+  it("ribbon with neither → [ymin, ymax]", () => {
+    expect(computeMissingRequired("ribbon", { x: "a" })).toEqual([
+      "ymin",
+      "ymax",
+    ]);
+  });
+
+  it("ribbon with both → no missing", () => {
+    expect(
+      computeMissingRequired("ribbon", { x: "a", ymin: "lo", ymax: "hi" }),
+    ).toEqual([]);
+  });
+
+  it("range mirrors ribbon (same required set)", () => {
+    expect(computeMissingRequired("range", { x: "a" })).toEqual([
+      "ymin",
+      "ymax",
+    ]);
+  });
+
+  it("point geom has no geom-specific required → []", () => {
+    expect(computeMissingRequired("point", {})).toEqual([]);
+  });
+
+  it("null / undefined / unknown draw → [] (no constraints)", () => {
+    expect(computeMissingRequired(null, { x: "a" })).toEqual([]);
+    expect(computeMissingRequired(undefined, {})).toEqual([]);
+    expect(computeMissingRequired("nonexistent", { x: "a" })).toEqual([]);
   });
 });

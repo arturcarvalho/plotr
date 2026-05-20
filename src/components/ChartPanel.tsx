@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import {
   chartLabel,
-  GEOM_SPECIFIC_REQUIRED,
+  computeMissingRequired,
   type Aes,
   type Layer,
 } from "../lib/buildQuery";
@@ -40,8 +40,7 @@ export function ChartPanel({
   // Geom-specific aesthetics that ggsql needs but the layer hasn't mapped yet.
   // MappingFields uses this to render the matching dropzones with an amber-
   // dashed border so the user sees what's still required.
-  const required = GEOM_SPECIFIC_REQUIRED[resolvedDraw ?? ""] ?? [];
-  const missingRequired = required.filter((a) => !layer.mappings[a]);
+  const missingRequired = computeMissingRequired(resolvedDraw, layer.mappings);
 
   return (
     <aside

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { ColumnInfo, ColumnKind } from "../lib/ggsql";
+import { Tooltip } from "./Tooltip";
 
 interface Props {
   ready: boolean;
@@ -7,7 +8,7 @@ interface Props {
   columns: ColumnInfo[];
   onLoadCsv: (name: string, bytes: Uint8Array) => void;
   onLoadPenguins: () => void;
-  onChangeFile: () => void;
+  onResetFile: () => void;
 }
 
 const GLYPH: Record<ColumnKind, string> = {
@@ -37,7 +38,7 @@ export function DataPanel({
   columns,
   onLoadCsv,
   onLoadPenguins,
-  onChangeFile,
+  onResetFile,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -72,28 +73,29 @@ export function DataPanel({
                   {activeTable}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={onChangeFile}
-                title="Change file"
-                aria-label="Change file"
-                className="shrink-0 rounded p-3 text-stone-500 hover:bg-stone-200 hover:text-stone-800"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
+              <Tooltip text="Reset file — removes the loaded CSV and clears it from browser storage. Keeps your chart config.">
+                <button
+                  type="button"
+                  onClick={onResetFile}
+                  aria-label="Reset file"
+                  className="shrink-0 rounded p-3 text-stone-500 hover:bg-stone-200 hover:text-stone-800"
                 >
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-              </button>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                </button>
+              </Tooltip>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto py-2">

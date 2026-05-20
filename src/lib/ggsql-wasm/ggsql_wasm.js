@@ -829,4 +829,20 @@ async function __wbg_init(module_or_path) {
     return __wbg_finalize_init(instance, module);
 }
 
+// PLOTR PATCH: expose a reset hook so we can force a full wasm re-init after
+// a runtime crash (memory access OOB / Rust panic). Re-applied on every
+// ggsql-wasm bump per MANUAL.md's bumping procedure.
+export function __plotr_reset() {
+    wasm = undefined;
+    wasmModule = undefined;
+    cachedDataViewMemory0 = null;
+    cachedFloat64ArrayMemory0 = null;
+    cachedUint8ArrayMemory0 = null;
+    // Rebuild the JS-side GC heap to its initial layout so slot indices
+    // start fresh for the new wasm instance.
+    heap = new Array(1024).fill(undefined);
+    heap.push(undefined, null, true, false);
+    heap_next = heap.length;
+}
+
 export { initSync, __wbg_init as default };

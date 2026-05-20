@@ -491,23 +491,19 @@ export function ChartTypePanel({
                     })
                   }
                 />
-                <NumberSliderField
-                  label="Hjust"
+                <NumberInputField
+                  label="Horizontal offset"
                   value={settings.hjust ?? null}
                   defaultLabel="0.5"
-                  min={0}
-                  max={1}
                   step={0.05}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, hjust: v ?? undefined })
                   }
                 />
-                <NumberSliderField
-                  label="Vjust"
+                <NumberInputField
+                  label="Vertical offset"
                   value={settings.vjust ?? null}
                   defaultLabel="0.5"
-                  min={0}
-                  max={1}
                   step={0.05}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, vjust: v ?? undefined })

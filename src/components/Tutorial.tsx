@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const STEPS = {
   1: { target: "data", label: "Choose data" },
-  2: { target: "layer", label: "Select layer" },
+  2: { target: "layer", label: "Select top layer with ▶ icon" },
   3: { target: "mappings", label: "Drag variables to X, Y, etc." },
 } as const;
 
@@ -47,7 +47,7 @@ export function TutorialOverlay({ step }: Props) {
   //                slide the whole tutorial sideways; positive shifts right)
   const LAYOUT = {
     1: { bubbleLeft: 60, bubbleWidth: 120, bubbleTop: 16, top: 10, left: 8 },
-    2: { bubbleLeft: 55, bubbleWidth: 130, bubbleTop: 18, top: 10, left: 16 },
+    2: { bubbleLeft: 55, bubbleWidth: 180, bubbleTop: 18, top: 10, left: 16 },
     3: { bubbleLeft: 55, bubbleWidth: 240, bubbleTop: 10, top: 25, left: -5 },
   } as const;
   const layout = LAYOUT[step];

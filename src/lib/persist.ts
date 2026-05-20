@@ -22,7 +22,6 @@ export interface Persisted {
   activeTable: string | null;
 }
 
-const BUILTIN_PREFIX = "ggsql:";
 const VERSION = 2;
 
 const VALID_DRAWS: ReadonlySet<string> = new Set<string>([
@@ -397,10 +396,10 @@ export async function serialize(p: Persisted): Promise<string> {
   if (Object.keys(project).length > 0) payload.P = project;
   const shared = encodeMappings(p.sharedMappings);
   if (Object.keys(shared).length > 0) payload.S = shared;
-  if (
-    typeof p.activeTable === "string" &&
-    p.activeTable.startsWith(BUILTIN_PREFIX)
-  ) {
+  // Any non-empty table name round-trips. Built-in (`ggsql:*`) tables are
+  // already registered with ggsql by the wasm init; user-uploaded CSVs are
+  // re-registered from IndexedDB before App reads `activeTable` from the hash.
+  if (typeof p.activeTable === "string" && p.activeTable.length > 0) {
     payload.t = p.activeTable;
   }
   const json = JSON.stringify(payload);
@@ -461,9 +460,7 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
     project: decodeProject(obj.P),
     sharedMappings: decodeMappings(obj.S),
     activeTable:
-      typeof obj.t === "string" && obj.t.startsWith(BUILTIN_PREFIX)
-        ? obj.t
-        : null,
+      typeof obj.t === "string" && obj.t.length > 0 ? obj.t : null,
   };
   if (customLayers && customLayers.length > 0) {
     out.customLayers = customLayers;

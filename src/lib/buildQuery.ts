@@ -1,16 +1,30 @@
 import type { ColumnInfo } from "./ggsql";
 import { resolveDraw } from "./autoChart";
 
-export const AESTHETICS = [
+// Aesthetics that apply to every chart type — used for render gating, shared
+// mapping detection, and shared mapping emission.
+export const UNIVERSAL_AESTHETICS = [
   "x",
   "y",
   "fill",
   "stroke",
   "opacity",
   "size",
-  "label",
-  "ymin",
-  "ymax",
+] as const;
+
+// Aesthetics that ggsql only accepts on specific geoms. Their dropzones only
+// render conditionally (per `resolvedDraw`) and `dataMaps` filters them out
+// for any other geom. They persist across geom switches so the value isn't
+// lost when the user temporarily moves away, but they should NOT count toward
+// "does this layer have any mapping" decisions.
+export const GEOM_SPECIFIC_AESTHETICS = ["label", "ymin", "ymax"] as const;
+
+// Full set — use when you need to iterate every possible aesthetic (persist,
+// dataMaps filter). For "does this matter to chart rendering" gates, prefer
+// UNIVERSAL_AESTHETICS.
+export const AESTHETICS = [
+  ...UNIVERSAL_AESTHETICS,
+  ...GEOM_SPECIFIC_AESTHETICS,
 ] as const;
 
 /** Aesthetics that ggsql requires (beyond universal x/y) for specific geoms.
@@ -21,6 +35,22 @@ export const GEOM_SPECIFIC_REQUIRED: Record<string, readonly Aes[]> = {
   ribbon: ["ymin", "ymax"],
   range: ["ymin", "ymax"],
 };
+
+/** Returns the subset of `GEOM_SPECIFIC_REQUIRED[draw]` that the layer has
+ *  not yet mapped. `null`/`undefined`/unknown draws return an empty array.
+ *  Used by `ChartPanel` to drive the amber-dashed dropzone + `(missing)`
+ *  suffix on the field label. Empty-string mappings count as unmapped — the
+ *  same loose contract `Dropzone` uses for the amber border. */
+export function computeMissingRequired(
+  draw: string | null | undefined,
+  mappings: Partial<Record<Aes, string>>,
+): Aes[] {
+  const required = GEOM_SPECIFIC_REQUIRED[draw ?? ""] ?? [];
+  return required.filter((a) => {
+    const v = mappings[a];
+    return v === undefined || v === "";
+  });
+}
 export const FACETS = ["facet_col", "facet_row"] as const;
 
 export type Aes = (typeof AESTHETICS)[number] | (typeof FACETS)[number];
@@ -265,7 +295,7 @@ export function buildQuery(
   if (!table) return null;
 
   const sharedHasAesthetic = sharedMappings
-    ? AESTHETICS.some((a) => sharedMappings[a])
+    ? UNIVERSAL_AESTHETICS.some((a) => sharedMappings[a])
     : false;
 
   // Custom layers slot in by `position`: same convention as `LabelsLayer`.
@@ -287,7 +317,7 @@ export function buildQuery(
   layers.forEach((l, i) => {
     drawLines.push(...customsAt(i));
     if (l.disabled) return;
-    const hasOwn = AESTHETICS.some((a) => l.mappings[a]);
+    const hasOwn = UNIVERSAL_AESTHETICS.some((a) => l.mappings[a]);
     if (!hasOwn && !sharedHasAesthetic) return;
     const draw = resolveDraw(l, columns, sharedMappings);
     if (!draw) return;
@@ -333,7 +363,7 @@ export function buildQuery(
   ];
 
   const sharedPairs = sharedMappings
-    ? AESTHETICS.filter((a) => sharedMappings[a]).map(
+    ? UNIVERSAL_AESTHETICS.filter((a) => sharedMappings[a]).map(
         (a) => `${sharedMappings[a]} AS ${a}`,
       )
     : [];

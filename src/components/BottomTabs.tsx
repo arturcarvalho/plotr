@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-export type Tab = "problems" | "ggsql";
+export type Tab = "problems" | "ggsql" | "vega-lite";
 
 interface Props {
   tab: Tab;
@@ -9,6 +9,7 @@ interface Props {
   warningCount: number;
   problems: ReactNode;
   ggsql: ReactNode;
+  vegaLite: ReactNode;
 }
 
 export function BottomTabs({
@@ -18,6 +19,7 @@ export function BottomTabs({
   warningCount,
   problems,
   ggsql,
+  vegaLite,
 }: Props) {
   const prevErrorsRef = useRef(errorCount);
   const [pulse, setPulse] = useState(false);
@@ -35,9 +37,6 @@ export function BottomTabs({
   return (
     <div className="flex h-full flex-col bg-app-chrome">
       <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 px-1">
-        <TabButton active={tab === "ggsql"} onClick={() => onTabChange("ggsql")}>
-          GGSQL
-        </TabButton>
         <TabButton
           active={tab === "problems"}
           onClick={() => onTabChange("problems")}
@@ -61,9 +60,22 @@ export function BottomTabs({
             </span>
           )}
         </TabButton>
+        <TabButton active={tab === "ggsql"} onClick={() => onTabChange("ggsql")}>
+          GGSQL
+        </TabButton>
+        <TabButton
+          active={tab === "vega-lite"}
+          onClick={() => onTabChange("vega-lite")}
+        >
+          Vega Lite
+        </TabButton>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "problems" ? problems : ggsql}
+        {tab === "problems"
+          ? problems
+          : tab === "ggsql"
+            ? ggsql
+            : vegaLite}
       </div>
     </div>
   );

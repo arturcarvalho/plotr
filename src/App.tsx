@@ -4,9 +4,9 @@ import vegaEmbed from "vega-embed";
 import { Warn } from "vega";
 import { ggsql, type ColumnInfo } from "./lib/ggsql";
 import {
-  AESTHETICS,
   AUTO,
   buildQuery,
+  UNIVERSAL_AESTHETICS,
   type Aes,
   type CustomLayer,
   type LabelsLayer,
@@ -21,11 +21,15 @@ import {
   resolveMappingKind,
 } from "./lib/autoChart";
 import { deserialize, serialize } from "./lib/persist";
+import { clearLastCsv, loadLastCsv, saveLastCsv } from "./lib/csvStore";
+import { normalizeCsvHeader } from "./lib/csvNormalize";
+import { isChartError, isUnrecoverableError } from "./lib/errorClass";
 import { BuildPanel } from "./components/BuildPanel";
 import { ChartPanel } from "./components/ChartPanel";
 import { ChartTypePanel } from "./components/ChartTypePanel";
 import { DataPanel } from "./components/DataPanel";
 import { GGSQLPanel } from "./components/GGSQLPanel";
+import { VegaSpecPanel } from "./components/VegaSpecPanel";
 import { CustomPanel } from "./components/CustomPanel";
 import { LabelsPanel } from "./components/LabelsPanel";
 import { MappingPanel } from "./components/MappingPanel";
@@ -38,6 +42,14 @@ import { ProblemsPanel } from "./components/ProblemsPanel";
 import { TutorialOverlay } from "./components/Tutorial";
 import { isSeen, markSeen } from "./lib/tutorial";
 import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
+
+// Debounce window for chart re-renders. Rapid input (slider drags, text typing)
+// resets the timer on every change; the chart only renders once the user pauses
+// for this long. Live preview is sacrificed for zero ggsql.execute calls during
+// active scrubbing — important because ggsql-wasm v0.3.1 OOBs on rapid execute,
+// especially with multi-layer queries. Lower = quicker post-pause render, more
+// renders; higher = slower preview but cheaper. Tune here when the feel is off.
+const CHART_DEBOUNCE_MS = 200;
 
 const newId = () => Math.random().toString(36).slice(2, 9);
 
@@ -88,9 +100,32 @@ export default function App() {
     isSeen() ? null : 1,
   );
   const [secondaryPanel, setSecondaryPanel] = useState<SecondaryPanel>(null);
-  const [bottomTab, setBottomTab] = useState<BottomTab>("ggsql");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("problems");
+  // Latest Vega-Lite spec ggsql produced for the bottom-pane `vega-lite` tab.
+  // Set on each successful render; cleared whenever the render path bails or
+  // throws so the tab shows its placeholder rather than a stale spec.
+  const [vegaSpec, setVegaSpec] = useState<unknown>(null);
   const vizRef = useRef<HTMLDivElement>(null);
   const [hydrated, setHydrated] = useState(false);
+
+  // Captured from the URL hash during the mount-time hydration but applied
+  // only after ggsql is ready AND any IndexedDB-stored CSV has been re-
+  // registered — otherwise `describeColumns(activeTable)` would race the
+  // re-registration and error.
+  const pendingActiveTableRef = useRef<string | null>(null);
+
+  // Render debounce: each `query` change clears the pending render and
+  // reschedules it CHART_DEBOUNCE_MS in the future. While the user is
+  // actively changing inputs the timer keeps resetting, so no renders fire
+  // until they pause. Closure captures the latest `query` value at fire time.
+  const pendingRenderRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ggsql-wasm v0.3.1 occasionally throws RuntimeError (memory access OOB /
+  // unreachable / etc.) under rapid execute() calls, especially with multi-
+  // layer queries. wasm-bindgen's init() can't cleanly reset the wasm linear
+  // memory in-place, so true recovery requires a page reload. We try
+  // reinitialize() once as a best effort; on second crash we tell the user.
+  const wasmRecoveryAttemptedRef = useRef(false);
 
   // Hydrate from URL hash on mount, then auto-open the first layer's panel.
   useEffect(() => {
@@ -112,7 +147,9 @@ export default function App() {
         }
         setProject(data.project);
         setSharedMappings(data.sharedMappings);
-        if (data.activeTable) setActiveTable(data.activeTable);
+        // Defer setActiveTable — a separate effect (watching `ready`) re-
+        // registers the user's CSV from IndexedDB and THEN applies the name.
+        if (data.activeTable) pendingActiveTableRef.current = data.activeTable;
       }
       // Don't auto-open the layer panel during the tutorial — step 2 needs the
       // user to click the layer card themselves.
@@ -157,6 +194,43 @@ export default function App() {
       .then(() => setReady(true))
       .catch((e) => setErrors([`Failed to initialise ggsql-wasm: ${e}`]));
   }, []);
+
+  // Once ggsql is ready, re-register the last uploaded CSV (if any) and then
+  // resolve activeTable from the URL hash → IndexedDB record → null.
+  // Runs again after wasm recovery (ready re-toggles), so the user's CSV
+  // is re-registered on the fresh wasm instance automatically.
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    (async () => {
+      let lastCsv: Awaited<ReturnType<typeof loadLastCsv>> = null;
+      try {
+        lastCsv = await loadLastCsv();
+        if (!cancelled && lastCsv) {
+          // Normalise headers on rehydration too — older entries stored
+          // before this fix may still carry whitespace-padded column names.
+          ggsql.registerCsv(lastCsv.name, normalizeCsvHeader(lastCsv.bytes));
+        }
+      } catch (e) {
+        // Best-effort: log + drop a corrupt entry, continue without it.
+        console.warn("Failed to rehydrate last CSV from IndexedDB:", e);
+        try {
+          await clearLastCsv();
+        } catch {
+          /* ignore */
+        }
+        lastCsv = null;
+      }
+      if (cancelled) return;
+      const fromHash = pendingActiveTableRef.current;
+      pendingActiveTableRef.current = null;
+      const next = fromHash ?? lastCsv?.name ?? null;
+      if (next) setActiveTable(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready]);
 
   useEffect(() => {
     if (!activeTable) {
@@ -217,6 +291,22 @@ export default function App() {
   // AUTO path. Only tracks non-null resolutions: briefly emptying mappings
   // then re-adding them must NOT lose settings if the resolved draw is the
   // same on both sides of the gap.
+  //
+  // IMPORTANT — two ordering invariants this hook depends on:
+  //
+  //   1. `prevResolvedRef.current = updated` MUST land BEFORE the `setLayers`
+  //      call. The subsequent setLayers triggers a re-render whose
+  //      `resolvedDrawByLayerId` memo recomputes; this effect re-fires;
+  //      comparing the (just-updated) ref against the next snapshot sees no
+  //      drift and bails. Swap the two and you get an infinite loop.
+  //
+  //   2. `resolvedDrawByLayerId` is a `useMemo` whose identity changes on
+  //      every recompute (deps: layers / columns / sharedMappings). This
+  //      effect's dep array relies on that referential-identity churn to
+  //      fire on each mapping change. If anyone tightens the memo with a
+  //      deep-equality wrapper, this hook will silently stop firing for
+  //      same-value recomputes — re-route through a key/version counter
+  //      instead.
   const prevResolvedRef = useRef<Record<string, string>>({});
   useEffect(() => {
     const prev = prevResolvedRef.current;
@@ -228,7 +318,7 @@ export default function App() {
       if (prev[id] !== undefined && prev[id] !== draw) changedIds.push(id);
       updated[id] = draw;
     }
-    prevResolvedRef.current = updated;
+    prevResolvedRef.current = updated; // invariant #1 — keep above setLayers
     if (changedIds.length === 0) return;
     setLayers((ls) => {
       let mutated = false;
@@ -243,19 +333,24 @@ export default function App() {
     });
   }, [resolvedDrawByLayerId]);
 
-  // Build + render chart whenever inputs change
+  // Build + render chart whenever inputs change. Debounced by
+  // CHART_DEBOUNCE_MS so rapid input doesn't queue vega-embed / ggsql.execute
+  // calls — only the final value renders, once the user pauses.
   useEffect(() => {
     if (!ready || !vizRef.current) return;
     if (!query) {
       vizRef.current.innerHTML = "";
+      setVegaSpec(null);
       return;
     }
 
     let cancelled = false;
-    (async () => {
+    const runRender = async () => {
+      if (cancelled) return;
       try {
         if (!ggsql.hasVisual(query)) {
           if (vizRef.current) vizRef.current.innerHTML = "";
+          if (!cancelled) setVegaSpec(null);
           return;
         }
         const spec = JSON.parse(ggsql.execute(query));
@@ -346,26 +441,109 @@ export default function App() {
         }
         if (!cancelled) {
           setWarnings(collected);
-          setErrors((prev) => prev.filter((m) => !m.startsWith("Chart error")));
+          // Successful render clears any displayed chart errors and
+          // unrecoverable messages — both are by definition stale once we've
+          // drawn a frame against the (possibly re-initialised) wasm.
+          setErrors((prev) =>
+            prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
+          );
+          // Expose the just-rendered Vega-Lite spec to the bottom-pane tab.
+          setVegaSpec(spec);
+          // Future crashes get a fresh recovery attempt.
+          wasmRecoveryAttemptedRef.current = false;
         }
       } catch (e) {
-        if (!cancelled) {
-          setErrors((prev) => [
-            `Chart error: ${String(e)}`,
-            ...prev.filter((m) => !m.startsWith("Chart error")),
-          ]);
+        if (cancelled) return;
+        // Any failure invalidates the vega-lite tab — clear the previously
+        // displayed spec back to the placeholder rather than leaving it
+        // looking like the current chart.
+        setVegaSpec(null);
+        const msg = String(e);
+        // ggsql-wasm v0.3.1 crashes in several distinct ways under rapid /
+        // multi-layer execute() calls: OOB heap overrun, Rust panic via
+        // `unreachable`, etc. All corrupt the runtime state.
+        const isWasmCrash =
+          msg.includes("memory access out of bounds") ||
+          msg.includes("unreachable") ||
+          (e instanceof Error && e.constructor.name === "RuntimeError");
+        const reloadHint =
+          "Please reload the page (Cmd/Ctrl+R) — your settings are preserved in the URL hash.";
+        if (isWasmCrash && !wasmRecoveryAttemptedRef.current) {
+          // First crash this session — best-effort recovery. wasm-bindgen
+          // can't truly reset the wasm memory in-place, so this may itself
+          // fail, but it works often enough to be worth trying once.
+          //
+          // Stash the current activeTable into the pending ref AND blank it.
+          // Otherwise the columns useEffect would re-fire right after
+          // setReady(true) and race the async rehydration: it'd call
+          // describeColumns() on the fresh wasm context (only builtins
+          // registered) and produce a spurious "no such table" error before
+          // our IndexedDB rehydration registered the user's CSV.
+          wasmRecoveryAttemptedRef.current = true;
+          if (activeTable) {
+            pendingActiveTableRef.current = activeTable;
+            setActiveTable(null);
+          }
+          setReady(false);
+          try {
+            await ggsql.reinitialize();
+            setReady(true);
+          } catch (initErr) {
+            setErrors((prev) => [
+              `ggsql-wasm crashed and re-init failed: ${String(initErr)}. ${reloadHint}`,
+              ...prev.filter(
+                (m) => !isUnrecoverableError(m) && !isChartError(m),
+              ),
+            ]);
+          }
+          return;
         }
+        if (isWasmCrash) {
+          // Second crash — recovery already attempted. Tell the user.
+          setErrors((prev) => [
+            `ggsql-wasm crashed again after re-init. ${reloadHint}`,
+            ...prev.filter(
+              (m) => !isUnrecoverableError(m) && !isChartError(m),
+            ),
+          ]);
+          return;
+        }
+        setErrors((prev) => [
+          `Chart error: ${msg}`,
+          ...prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
+        ]);
       }
-    })();
+    };
+
+    if (pendingRenderRef.current) clearTimeout(pendingRenderRef.current);
+    pendingRenderRef.current = setTimeout(runRender, CHART_DEBOUNCE_MS);
+
     return () => {
       cancelled = true;
+      if (pendingRenderRef.current) {
+        clearTimeout(pendingRenderRef.current);
+        pendingRenderRef.current = null;
+      }
     };
   }, [ready, query]);
 
   const onLoadCsv = (name: string, bytes: Uint8Array) => {
     try {
-      ggsql.registerCsv(name, bytes);
+      // Trim whitespace from header cells before anything sees the bytes —
+      // ggsql-wasm's CSV reader keeps leading spaces in column names while
+      // its query parser strips them from identifier refs, so a header like
+      // `country, activity, duration` would otherwise register columns the
+      // user can never successfully map. Normalised bytes are what we
+      // register, persist, and (on reload) re-register.
+      const normalized = normalizeCsvHeader(bytes);
+      ggsql.registerCsv(name, normalized);
       setActiveTable(name);
+      // Best-effort: persist the bytes so a reload re-registers automatically.
+      // Failure (private mode quota, browser without IDB, etc.) shouldn't
+      // break the upload flow.
+      void saveLastCsv(name, normalized).catch((e) => {
+        console.warn("Failed to persist uploaded CSV to IndexedDB:", e);
+      });
       if (tutorialStep === 1) setTutorialStep(2);
     } catch (e) {
       setErrors((prev) => [`Failed to load CSV "${name}": ${e}`, ...prev]);
@@ -565,8 +743,19 @@ export default function App() {
     );
   };
 
-  const onChangeFile = () => {
+  // File-only reset: drops the loaded CSV from IndexedDB and clears the
+  // active table. Chart config (layers / labels / settings) is preserved
+  // so the user can re-upload a compatible CSV and keep their layout.
+  const onResetFile = () => {
     setActiveTable(null);
+    void clearLastCsv().catch((e) => {
+      console.warn("Failed to clear IndexedDB CSV entry:", e);
+    });
+  };
+
+  // Chart-only reset: clears layers / labels / custom / shared / project.
+  // The loaded CSV stays — wired to a new button at the bottom of the rail.
+  const onResetChart = () => {
     onResetConfig();
   };
 
@@ -613,10 +802,18 @@ export default function App() {
   const closeSecondaryPanel = () => setSecondaryPanel(null);
 
   const hasMappings =
-    AESTHETICS.some((a) => sharedMappings[a]) ||
-    layers.some((l) => AESTHETICS.some((a) => l.mappings[a])) ||
+    UNIVERSAL_AESTHETICS.some((a) => sharedMappings[a]) ||
+    layers.some((l) =>
+      UNIVERSAL_AESTHETICS.some((a) => l.mappings[a]),
+    ) ||
     customLayers.some((c) => !c.disabled && c.ggsql.trim().length > 0);
   const isEmpty = !activeTable || !hasMappings;
+  // The chart-error banner swaps "View" → "Reload page" whenever any
+  // displayed error matches the unrecoverable-error list (currently the
+  // "Chart error:" + "ggsql-wasm crashed" prefixes). Derived rather than a
+  // ref so it auto-clears the moment the next successful render filters
+  // those messages out.
+  const wasmUnrecoverable = errors.some(isUnrecoverableError);
 
   // Resolve which panel goes in the slot ----------------------------------
   const panelLayerId =
@@ -643,7 +840,7 @@ export default function App() {
               columns={columns}
               onLoadCsv={onLoadCsv}
               onLoadPenguins={onLoadPenguins}
-              onChangeFile={onChangeFile}
+              onResetFile={onResetFile}
             />
             {activeTable && (
               <div
@@ -681,6 +878,7 @@ export default function App() {
                   onToggleLayerDisabled={onToggleLayerDisabled}
                   onToggleLabelsDisabled={onToggleLabelsDisabled}
                   onToggleCustomDisabled={onToggleCustomDisabled}
+                  onResetChart={onResetChart}
                 />
                 {activeLabels && activePanel?.kind === "labels" ? (
                   <LabelsPanel
@@ -760,9 +958,7 @@ export default function App() {
                     }
                     onClose={closeSecondaryPanel}
                   />
-                ) : (
-                  <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
-                )}
+                ) : null}
               </div>
             )}
           </div>
@@ -781,7 +977,9 @@ export default function App() {
                   <Viz
                     ref={vizRef}
                     hasError={errors.length > 0}
+                    unrecoverable={wasmUnrecoverable}
                     onShowProblems={() => setBottomTab("problems")}
+                    onReload={() => window.location.reload()}
                   />
                 </div>
               </Panel>
@@ -801,6 +999,7 @@ export default function App() {
                       <ProblemsPanel errors={errors} warnings={warnings} />
                     }
                     ggsql={<GGSQLPanel query={query} />}
+                    vegaLite={<VegaSpecPanel spec={vegaSpec} />}
                   />
                 </div>
               </Panel>

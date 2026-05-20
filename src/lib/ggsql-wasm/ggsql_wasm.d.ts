@@ -103,3 +103,11 @@ export function initSync(module: { module: SyncInitInput } | SyncInitInput): Ini
  * @returns {Promise<InitOutput>}
  */
 export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;
+
+/**
+ * PLOTR PATCH: clears the wasm-bindgen module's private `wasm` / `wasmModule`
+ * refs + cached memory views so a follow-up `__wbg_init()` actually re-loads
+ * and re-instantiates the wasm. Used for recovery after a wasm RuntimeError
+ * (memory access OOB / Rust panic). Re-apply on every ggsql-wasm bump.
+ */
+export function __plotr_reset(): void;

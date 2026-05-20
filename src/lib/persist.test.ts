@@ -492,13 +492,24 @@ describe("activeTable", () => {
     expect((await deserialize(s))?.activeTable).toBe("ggsql:penguins");
   });
 
-  it("drops user CSV table names (no ggsql: prefix)", async () => {
+  it("round-trips user CSV table names (any non-empty string)", async () => {
     const s = await serialize({
       layers: [],
       labels: [],
       project: {},
       sharedMappings: {},
       activeTable: "my_csv",
+    });
+    expect((await deserialize(s))?.activeTable).toBe("my_csv");
+  });
+
+  it("treats empty string as null", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: "",
     });
     expect((await deserialize(s))?.activeTable).toBeNull();
   });

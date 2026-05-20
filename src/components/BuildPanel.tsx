@@ -8,6 +8,7 @@ import { LayerCard } from "./LayerCard";
 import { LabelsCard } from "./LabelsCard";
 import { CustomCard } from "./CustomCard";
 import { AddMenu } from "./AddMenu";
+import { Tooltip } from "./Tooltip";
 
 interface Props {
   layers: Layer[];
@@ -31,6 +32,7 @@ interface Props {
   onToggleLayerDisabled: (id: string) => void;
   onToggleLabelsDisabled: (id: string) => void;
   onToggleCustomDisabled: (id: string) => void;
+  onResetChart: () => void;
 }
 
 export function BuildPanel({
@@ -55,6 +57,7 @@ export function BuildPanel({
   onToggleLayerDisabled,
   onToggleLabelsDisabled,
   onToggleCustomDisabled,
+  onResetChart,
 }: Props) {
   // Labels with position > layers.length (e.g. from a stale URL hash that
   // outlived a layer removal) are clamped to the final slot so they still
@@ -143,8 +146,39 @@ export function BuildPanel({
             />
           </div>
         </div>
+        <div className="flex h-[52px] w-full items-center justify-center border-t border-stone-200">
+          <Tooltip text="Reset chart — clears all layers, labels, custom blocks, and shared settings. Keeps the loaded file.">
+            <button
+              type="button"
+              onClick={onResetChart}
+              aria-label="Reset chart"
+              className="flex h-9 w-9 items-center justify-center rounded text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700"
+            >
+              <ResetIcon />
+            </button>
+          </Tooltip>
+        </div>
       </div>
     </aside>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
   );
 }
 

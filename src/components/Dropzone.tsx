@@ -68,7 +68,7 @@ export function Dropzone({
         "flex h-9 w-full items-center gap-1 rounded border-2 border-dashed bg-white px-2 transition-colors",
         over
           ? "border-sky-400 bg-sky-50"
-          : required && !value
+          : required && (value === undefined || value === "")
             ? "border-amber-500"
             : "border-stone-300",
       ].join(" ")}

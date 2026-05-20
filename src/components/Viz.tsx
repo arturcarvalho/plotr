@@ -2,11 +2,16 @@ import { forwardRef } from "react";
 
 interface Props {
   hasError: boolean;
+  /** Chart-error banner is in the unrecoverable wasm-crash state. The CTA
+   *  swaps from "View" (jump to Problems tab) to "Reload page" (location
+   *  reload — the only path back once ggsql-wasm is corrupted past recovery). */
+  unrecoverable?: boolean;
   onShowProblems: () => void;
+  onReload: () => void;
 }
 
 export const Viz = forwardRef<HTMLDivElement, Props>(
-  ({ hasError, onShowProblems }, ref) => {
+  ({ hasError, unrecoverable, onShowProblems, onReload }, ref) => {
     return (
       <div className="relative h-full w-full overflow-hidden">
         <div ref={ref} className="absolute inset-0 overflow-hidden p-4" />
@@ -28,13 +33,23 @@ export const Viz = forwardRef<HTMLDivElement, Props>(
               <line x1="12" y1="16" x2="12" y2="16" />
             </svg>
             <span>Chart error</span>
-            <button
-              type="button"
-              onClick={onShowProblems}
-              className="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
-            >
-              View
-            </button>
+            {unrecoverable ? (
+              <button
+                type="button"
+                onClick={onReload}
+                className="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+              >
+                Reload page
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onShowProblems}
+                className="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+              >
+                View
+              </button>
+            )}
           </div>
         )}
       </div>
