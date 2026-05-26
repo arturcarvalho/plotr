@@ -177,7 +177,7 @@ export const CHART_LABELS: Record<string, string> = {
   area: "Area chart",
   histogram: "Histogram",
   boxplot: "Box plot",
-  smooth: "Trend line",
+  smooth: "Smooth line",
   density: "Density plot",
   violin: "Violin plot",
   ribbon: "Ribbon",

@@ -114,7 +114,7 @@ const AreaChart: FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-const TrendLine: FC<IconProps> = ({ className }) => (
+const SmoothLine: FC<IconProps> = ({ className }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -244,7 +244,7 @@ const ICONS: Record<string, FC<IconProps>> = {
   tile: Heatmap,
   line: LineChart,
   area: AreaChart,
-  smooth: TrendLine,
+  smooth: SmoothLine,
   violin: Violin,
   density: Density,
   text: TextLabels,
