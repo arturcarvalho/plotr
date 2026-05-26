@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deserialize, serialize, type Persisted } from "./persist";
+import {
+  deserialize,
+  serialize,
+  type ActivePanel,
+  type Persisted,
+  type SecondaryPanel,
+} from "./persist";
 import type { Layer } from "./buildQuery";
 
 const empty: Persisted = {
@@ -783,5 +789,195 @@ describe("customLayers persistence", () => {
     const payload = await wrap({});
     const back = await deserialize(payload);
     expect(back?.customLayers).toBeUndefined();
+  });
+});
+
+describe("activePanel persistence", () => {
+  it("round-trips a layer-kind activePanel (id resolves to an existing layer)", async () => {
+    const ap: ActivePanel = { kind: "layer", layerId: "L1" };
+    const s = await serialize({
+      layers: [{ id: "L1", draw: "point", mappings: { x: "a" } }],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      activePanel: ap,
+    });
+    expect((await deserialize(s))?.activePanel).toEqual(ap);
+  });
+
+  it("round-trips a labels-kind activePanel", async () => {
+    const ap: ActivePanel = { kind: "labels", labelsId: "B1" };
+    const s = await serialize({
+      layers: [],
+      labels: [{ id: "B1", position: 0 }],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      activePanel: ap,
+    });
+    expect((await deserialize(s))?.activePanel).toEqual(ap);
+  });
+
+  it("round-trips a custom-kind activePanel", async () => {
+    const ap: ActivePanel = { kind: "custom", customId: "C1" };
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      customLayers: [{ id: "C1", ggsql: "SCALE x TO log", position: 0 }],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      activePanel: ap,
+    });
+    expect((await deserialize(s))?.activePanel).toEqual(ap);
+  });
+
+  it("round-trips a shared-kind activePanel (no id needed)", async () => {
+    const ap: ActivePanel = { kind: "shared" };
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      activePanel: ap,
+    });
+    expect((await deserialize(s))?.activePanel).toEqual(ap);
+  });
+
+  it("omits activePanel from the payload when null (legacy default)", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      activePanel: null,
+    });
+    const back = await deserialize(s);
+    expect(back?.activePanel).toBeUndefined();
+  });
+
+  it("drops a layer-kind activePanel pointing at a non-existent layer id", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "point", m: { x: "a" } }],
+      A: { k: "layer", i: "MISSING" },
+    });
+    const back = await deserialize(payload);
+    expect(back?.activePanel).toBeUndefined();
+  });
+
+  it("drops a labels-kind activePanel pointing at a non-existent labels id", async () => {
+    const payload = await wrap({
+      B: [{ i: "B1", p: 0 }],
+      A: { k: "labels", i: "GONE" },
+    });
+    expect((await deserialize(payload))?.activePanel).toBeUndefined();
+  });
+
+  it("drops a custom-kind activePanel pointing at a non-existent custom id", async () => {
+    const payload = await wrap({
+      C: [{ i: "C1", g: "SCALE x TO log", p: 0 }],
+      A: { k: "custom", i: "GONE" },
+    });
+    expect((await deserialize(payload))?.activePanel).toBeUndefined();
+  });
+
+  it("drops an activePanel with an unknown kind", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "point", m: { x: "a" } }],
+      A: { k: "evil", i: "L1" },
+    });
+    expect((await deserialize(payload))?.activePanel).toBeUndefined();
+  });
+
+  it("drops a non-shared activePanel missing its id", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "point", m: { x: "a" } }],
+      A: { k: "layer" },
+    });
+    expect((await deserialize(payload))?.activePanel).toBeUndefined();
+  });
+});
+
+describe("secondaryPanel persistence", () => {
+  it("round-trips a settings-kind secondaryPanel paired with a layer activePanel", async () => {
+    const sp: SecondaryPanel = { kind: "settings" };
+    const s = await serialize({
+      layers: [{ id: "L1", draw: "point", mappings: { x: "a" } }],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      activePanel: { kind: "layer", layerId: "L1" },
+      secondaryPanel: sp,
+    });
+    expect((await deserialize(s))?.secondaryPanel).toEqual(sp);
+  });
+
+  it("round-trips a mapping-kind secondaryPanel with a valid aes", async () => {
+    const sp: SecondaryPanel = { kind: "mapping", aes: "x" };
+    const s = await serialize({
+      layers: [{ id: "L1", draw: "point", mappings: { x: "a" } }],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      activePanel: { kind: "layer", layerId: "L1" },
+      secondaryPanel: sp,
+    });
+    expect((await deserialize(s))?.secondaryPanel).toEqual(sp);
+  });
+
+  it("drops secondaryPanel when activePanel is not a layer (invariant)", async () => {
+    const payload = await wrap({
+      A: { k: "shared" },
+      D: { k: "settings" },
+    });
+    const back = await deserialize(payload);
+    expect(back?.activePanel).toEqual({ kind: "shared" });
+    expect(back?.secondaryPanel).toBeUndefined();
+  });
+
+  it("drops secondaryPanel when activePanel is missing entirely", async () => {
+    const payload = await wrap({
+      D: { k: "settings" },
+    });
+    expect((await deserialize(payload))?.secondaryPanel).toBeUndefined();
+  });
+
+  it("drops a mapping secondaryPanel with an unknown aes", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "point", m: { x: "a" } }],
+      A: { k: "layer", i: "L1" },
+      D: { k: "mapping", a: "rogue" },
+    });
+    expect((await deserialize(payload))?.secondaryPanel).toBeUndefined();
+  });
+
+  it("drops a mapping secondaryPanel missing its aes", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "point", m: { x: "a" } }],
+      A: { k: "layer", i: "L1" },
+      D: { k: "mapping" },
+    });
+    expect((await deserialize(payload))?.secondaryPanel).toBeUndefined();
+  });
+
+  it("drops a secondaryPanel with an unknown kind", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "point", m: { x: "a" } }],
+      A: { k: "layer", i: "L1" },
+      D: { k: "evil" },
+    });
+    expect((await deserialize(payload))?.secondaryPanel).toBeUndefined();
+  });
+
+  it("legacy hash without A / D fields decodes both panels to undefined", async () => {
+    const payload = await wrap({});
+    const back = await deserialize(payload);
+    expect(back?.activePanel).toBeUndefined();
+    expect(back?.secondaryPanel).toBeUndefined();
   });
 });

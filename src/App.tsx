@@ -20,7 +20,12 @@ import {
   resolveDraw,
   resolveMappingKind,
 } from "./lib/autoChart";
-import { deserialize, serialize } from "./lib/persist";
+import {
+  deserialize,
+  serialize,
+  type ActivePanel,
+  type SecondaryPanel,
+} from "./lib/persist";
 import { clearLastCsv, loadLastCsv, saveLastCsv } from "./lib/csvStore";
 import { normalizeCsvHeader } from "./lib/csvNormalize";
 import { isChartError, isUnrecoverableError } from "./lib/errorClass";
@@ -69,18 +74,6 @@ const initialCustom = (position: number): CustomLayer => ({
   ggsql: "",
   position,
 });
-
-type ActivePanel =
-  | null
-  | { kind: "labels"; labelsId: string }
-  | { kind: "shared" }
-  | { kind: "layer"; layerId: string }
-  | { kind: "custom"; customId: string };
-
-type SecondaryPanel =
-  | null
-  | { kind: "settings" }
-  | { kind: "mapping"; aes: Aes };
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -136,6 +129,8 @@ export default function App() {
       );
       if (cancelled) return;
       let firstLayerId: string | null = layers[0]?.id ?? null;
+      let restoredActivePanel: ActivePanel | undefined;
+      let restoredSecondaryPanel: SecondaryPanel | undefined;
       if (data) {
         if (data.layers.length > 0) {
           setLayers(data.layers);
@@ -150,10 +145,21 @@ export default function App() {
         // Defer setActiveTable — a separate effect (watching `ready`) re-
         // registers the user's CSV from IndexedDB and THEN applies the name.
         if (data.activeTable) pendingActiveTableRef.current = data.activeTable;
+        restoredActivePanel = data.activePanel ?? undefined;
+        restoredSecondaryPanel = data.secondaryPanel ?? undefined;
       }
-      // Don't auto-open the layer panel during the tutorial — step 2 needs the
-      // user to click the layer card themselves.
-      if (firstLayerId && tutorialStep !== 1) {
+      // If the hash had a valid panel selection, restore it. Otherwise fall
+      // back to the first-layer auto-open default (skipped during tutorial
+      // step 1 so step 2 needs the user to click the layer card themselves).
+      if (restoredActivePanel) {
+        setActivePanel(restoredActivePanel);
+        if (
+          restoredSecondaryPanel &&
+          restoredActivePanel.kind === "layer"
+        ) {
+          setSecondaryPanel(restoredSecondaryPanel);
+        }
+      } else if (firstLayerId && tutorialStep !== 1) {
         setActivePanel({ kind: "layer", layerId: firstLayerId });
       }
       setHydrated(true);
@@ -176,6 +182,8 @@ export default function App() {
         project,
         sharedMappings,
         activeTable,
+        activePanel,
+        secondaryPanel,
       });
       if (cancelled) return;
       const next = "#" + payload;
@@ -186,7 +194,17 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, layers, labels, customLayers, project, sharedMappings, activeTable]);
+  }, [
+    hydrated,
+    layers,
+    labels,
+    customLayers,
+    project,
+    sharedMappings,
+    activeTable,
+    activePanel,
+    secondaryPanel,
+  ]);
 
   useEffect(() => {
     ggsql

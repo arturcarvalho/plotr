@@ -11,6 +11,24 @@ import {
   type ProjectSettings,
 } from "./buildQuery";
 
+/** UI side-panel selection (3rd column in the build pane). Null = nothing
+ *  open; defined in persist so both App.tsx and the URL-hash codec share one
+ *  source of truth. The four open kinds mirror the BuildPanel icon rows. */
+export type ActivePanel =
+  | null
+  | { kind: "labels"; labelsId: string }
+  | { kind: "shared" }
+  | { kind: "layer"; layerId: string }
+  | { kind: "custom"; customId: string };
+
+/** UI secondary-panel selection (4th column). Only meaningful while
+ *  `activePanel` is a chart layer — settings and per-aesthetic mapping
+ *  panels both operate on the active layer. */
+export type SecondaryPanel =
+  | null
+  | { kind: "settings" }
+  | { kind: "mapping"; aes: Aes };
+
 export interface Persisted {
   layers: Layer[];
   labels: LabelsLayer[];
@@ -20,6 +38,12 @@ export interface Persisted {
   sharedMappings: Partial<Record<Aes, string>>;
   /** Built-in (ggsql:*) table name only. User CSV tables are not persisted. */
   activeTable: string | null;
+  /** Optional. Undefined / null = legacy hash or user-closed; App.tsx falls
+   *  back to the first-chart-layer auto-open default. */
+  activePanel?: ActivePanel;
+  /** Optional. Undefined / null = collapsed. Decoder enforces the invariant
+   *  that this is only present when `activePanel` is a chart layer. */
+  secondaryPanel?: SecondaryPanel;
 }
 
 const VERSION = 2;
@@ -104,6 +128,14 @@ interface ShortProject {
   r?: number;
   c?: false;
 }
+interface ShortActivePanel {
+  k: "labels" | "shared" | "layer" | "custom";
+  i?: string;
+}
+interface ShortSecondaryPanel {
+  k: "settings" | "mapping";
+  a?: Aes;
+}
 interface Payload {
   v: number;
   L?: ShortLayer[];
@@ -112,6 +144,8 @@ interface Payload {
   P?: ShortProject;
   S?: Partial<Record<Aes, string>>;
   t?: string;
+  A?: ShortActivePanel;
+  D?: ShortSecondaryPanel;
 }
 
 function encodeMappings(
@@ -207,6 +241,30 @@ function encodeProject(p: ProjectSettings): ShortProject {
   if (typeof p.ratio === "number" && !Number.isNaN(p.ratio)) out.r = p.ratio;
   if (p.clip === false) out.c = false;
   return out;
+}
+
+function encodeActivePanel(
+  ap: ActivePanel | undefined,
+): ShortActivePanel | undefined {
+  if (!ap) return undefined;
+  switch (ap.kind) {
+    case "shared":
+      return { k: "shared" };
+    case "layer":
+      return { k: "layer", i: ap.layerId };
+    case "labels":
+      return { k: "labels", i: ap.labelsId };
+    case "custom":
+      return { k: "custom", i: ap.customId };
+  }
+}
+
+function encodeSecondaryPanel(
+  sp: SecondaryPanel | undefined,
+): ShortSecondaryPanel | undefined {
+  if (!sp) return undefined;
+  if (sp.kind === "settings") return { k: "settings" };
+  return { k: "mapping", a: sp.aes };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -336,6 +394,62 @@ function decodeProject(raw: unknown): ProjectSettings {
   return out;
 }
 
+/** Decode an ActivePanel, cross-validating any referenced id against the
+ *  payload's just-decoded layers / labels / custom-layers. A stale id
+ *  collapses the panel back to undefined — App.tsx then runs its first-layer
+ *  auto-open default. */
+function decodeActivePanel(
+  raw: unknown,
+  layers: Layer[],
+  labels: LabelsLayer[],
+  customLayers: CustomLayer[] | undefined,
+): ActivePanel | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.k !== "string") return undefined;
+  switch (r.k) {
+    case "shared":
+      return { kind: "shared" };
+    case "layer": {
+      if (!isNonEmptyString(r.i)) return undefined;
+      if (!layers.some((l) => l.id === r.i)) return undefined;
+      return { kind: "layer", layerId: r.i };
+    }
+    case "labels": {
+      if (!isNonEmptyString(r.i)) return undefined;
+      if (!labels.some((l) => l.id === r.i)) return undefined;
+      return { kind: "labels", labelsId: r.i };
+    }
+    case "custom": {
+      if (!isNonEmptyString(r.i)) return undefined;
+      if (!customLayers || !customLayers.some((c) => c.id === r.i)) {
+        return undefined;
+      }
+      return { kind: "custom", customId: r.i };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Decode a SecondaryPanel and enforce the invariant that it only exists
+ *  alongside a layer-kind activePanel. */
+function decodeSecondaryPanel(
+  raw: unknown,
+  activePanel: ActivePanel | undefined,
+): SecondaryPanel | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  if (!activePanel || activePanel.kind !== "layer") return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.k !== "string") return undefined;
+  if (r.k === "settings") return { kind: "settings" };
+  if (r.k === "mapping") {
+    if (!isNonEmptyString(r.a) || !VALID_AES.has(r.a)) return undefined;
+    return { kind: "mapping", aes: r.a as Aes };
+  }
+  return undefined;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Compression + URL-safe base64
 // ────────────────────────────────────────────────────────────────────────────
@@ -402,6 +516,10 @@ export async function serialize(p: Persisted): Promise<string> {
   if (typeof p.activeTable === "string" && p.activeTable.length > 0) {
     payload.t = p.activeTable;
   }
+  const ap = encodeActivePanel(p.activePanel);
+  if (ap) payload.A = ap;
+  const sp = encodeSecondaryPanel(p.secondaryPanel);
+  if (sp) payload.D = sp;
   const json = JSON.stringify(payload);
   const gz = await gzipString(json);
   return `s=${base64UrlEncode(gz)}`;
@@ -438,6 +556,8 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
     P?: unknown;
     S?: unknown;
     t?: unknown;
+    A?: unknown;
+    D?: unknown;
   };
   const layers = Array.isArray(obj.L)
     ? obj.L
@@ -465,5 +585,9 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
   if (customLayers && customLayers.length > 0) {
     out.customLayers = customLayers;
   }
+  const activePanel = decodeActivePanel(obj.A, layers, labels, customLayers);
+  if (activePanel) out.activePanel = activePanel;
+  const secondaryPanel = decodeSecondaryPanel(obj.D, activePanel);
+  if (secondaryPanel) out.secondaryPanel = secondaryPanel;
   return out;
 }
