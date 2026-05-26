@@ -93,6 +93,10 @@ export interface LayerSettings {
   vjust?: number;
   rotation?: number;
   format?: string;
+  /** Per-layer SQL WHERE-style predicate emitted as `FILTER <expr>` at the
+   *  tail of the DRAW clause. Free-form passthrough — ggsql parses + validates
+   *  it. Empty / whitespace-only is dropped. */
+  filter?: string;
   slope?: number;
   opacity?: number;
   size?: number;
@@ -232,6 +236,15 @@ const SETTING_ORDER = [
   "size",
 ] as const;
 
+/** Per-grammar, FILTER sits at the tail of the DRAW clause (after MAPPING +
+ *  SETTING). Free-form passthrough — we don't parse the SQL ourselves;
+ *  ggsql will surface a parse error if it's malformed. Empty + whitespace
+ *  emit nothing so an untouched input doesn't pollute the query. */
+const layerFilterClause = (filter: string | undefined): string => {
+  const trimmed = filter?.trim();
+  return trimmed ? ` FILTER ${trimmed}` : "";
+};
+
 const layerSettingClause = (s: LayerSettings | undefined): string => {
   if (!s) return "";
   const entries: Array<[string, unknown]> = [];
@@ -348,7 +361,7 @@ export function buildQuery(
       ? ` MAPPING ${dataMaps.join(", ")}`
       : "";
     drawLines.push(
-      `DRAW ${emittedDraw}${mappingClause}${layerSettingClause(l.settings)}`,
+      `DRAW ${emittedDraw}${mappingClause}${layerSettingClause(l.settings)}${layerFilterClause(l.settings?.filter)}`,
     );
   });
   drawLines.push(...customsAt(layers.length));

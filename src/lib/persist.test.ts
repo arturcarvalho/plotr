@@ -792,6 +792,46 @@ describe("customLayers persistence", () => {
   });
 });
 
+describe("layer filter persistence", () => {
+  it("round-trips a non-trivial FILTER expression", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "a", y: "b" },
+          settings: { filter: "species = 'Adelie' AND body_mass > 4000" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      filter: "species = 'Adelie' AND body_mass > 4000",
+    });
+  });
+
+  it("empty-string filter is dropped from the short form", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "a", y: "b" },
+          settings: { filter: "" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toBeUndefined();
+  });
+});
+
 describe("activePanel persistence", () => {
   it("round-trips a layer-kind activePanel (id resolves to an existing layer)", async () => {
     const ap: ActivePanel = { kind: "layer", layerId: "L1" };

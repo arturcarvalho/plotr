@@ -4,6 +4,7 @@ import {
   computeMissingRequired,
   type Aes,
   type Layer,
+  type LayerSettings,
 } from "../lib/buildQuery";
 import { crossesBoundary, useDragging } from "../lib/dragHelpers";
 import { DeleteBanner } from "./DeleteBanner";
@@ -21,6 +22,7 @@ interface Props {
   ) => void;
   onToggleMappingSettings: (aes: Aes) => void;
   onOpenSettings: () => void;
+  onChangeSettings: (settings: LayerSettings) => void;
 }
 
 export function ChartPanel({
@@ -31,6 +33,7 @@ export function ChartPanel({
   onDrop,
   onToggleMappingSettings,
   onOpenSettings,
+  onChangeSettings,
 }: Props) {
   const title = resolvedDraw ? chartLabel(resolvedDraw) : "Chart";
   const asideRef = useRef<HTMLElement>(null);
@@ -82,9 +85,54 @@ export function ChartPanel({
             onDrop={onDrop}
             onToggleSettings={onToggleMappingSettings}
           />
+          <FilterField
+            value={layer.settings?.filter ?? ""}
+            onChange={(v) => {
+              const next: LayerSettings = { ...layer.settings };
+              if (v) next.filter = v;
+              else delete next.filter;
+              onChangeSettings(next);
+            }}
+          />
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Per-layer SQL WHERE-style predicate. Emitted as `FILTER <expr>` at the
+ *  tail of the DRAW clause. Free-form passthrough — ggsql parses + validates
+ *  it, errors surface in the Problems pane. Clears with other settings on
+ *  geom switch (filter lives on `LayerSettings`). */
+function FilterField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="mt-4 pr-3">
+      <label className="block">
+        <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
+          <span>Filter</span>
+          <span className="text-[10px] text-stone-500">
+            {value.trim() ? "set" : "off"}
+          </span>
+        </span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="species = 'Adelie'"
+          spellCheck={false}
+          className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
+        />
+      </label>
+      <p className="mt-1 font-mono text-[10px] leading-relaxed text-stone-500">
+        SQL WHERE-style predicate, applied to this layer only.
+      </p>
+    </div>
   );
 }
 

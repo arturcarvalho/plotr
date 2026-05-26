@@ -937,6 +937,9 @@ export default function App() {
                     }
                     onToggleMappingSettings={toggleMappingPanel}
                     onOpenSettings={toggleSettingsPanel}
+                    onChangeSettings={(s) =>
+                      onChangeSettings(panelLayer.id, s)
+                    }
                   />
                 ) : (
                   <div className="h-full w-[280px] shrink-0 bg-app-chrome" />

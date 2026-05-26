@@ -1639,3 +1639,164 @@ describe("computeMissingRequired", () => {
     expect(computeMissingRequired("nonexistent", { x: "a" })).toEqual([]);
   });
 });
+
+describe("buildQuery emits per-layer FILTER", () => {
+  it("emits FILTER at the END of the DRAW line (after MAPPING)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "species = 'Adelie'" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW point MAPPING bill_len AS x, bill_dep AS y FILTER species = 'Adelie'",
+    );
+  });
+
+  it("FILTER comes after SETTING per ggsql grammar order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "bar",
+          mappings: { x: "species" },
+          settings: { position: "dodge", filter: "body_mass > 4000" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW bar MAPPING species AS x SETTING position => 'dodge' FILTER body_mass > 4000",
+    );
+  });
+
+  it("each layer carries its own FILTER independently", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L1",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "species = 'Adelie'" },
+        },
+        {
+          id: "L2",
+          draw: "smooth",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "species = 'Gentoo'" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW point MAPPING bill_len AS x, bill_dep AS y FILTER species = 'Adelie'",
+    );
+    expect(q).toContain(
+      "DRAW smooth MAPPING bill_len AS x, bill_dep AS y FILTER species = 'Gentoo'",
+    );
+  });
+
+  it("disabled layer skips its DRAW (and FILTER) entirely", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L1",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+        },
+        {
+          id: "L2",
+          draw: "smooth",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "species = 'Gentoo'" },
+          disabled: true,
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("Gentoo");
+    expect(q).not.toContain("FILTER");
+  });
+
+  it("empty / whitespace-only filter is dropped (no FILTER clause)", () => {
+    const empty = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(empty).not.toContain("FILTER");
+
+    const ws = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "   \t  " },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(ws).not.toContain("FILTER");
+  });
+
+  it("filter value is trimmed before emission", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "   species = 'Adelie'   " },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW point MAPPING bill_len AS x, bill_dep AS y FILTER species = 'Adelie'",
+    );
+    expect(q).not.toContain("FILTER    species");
+  });
+
+  it("compound predicates pass through verbatim", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { filter: "sex = 'female' AND body_mass > 4000" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("FILTER sex = 'female' AND body_mass > 4000");
+  });
+});
