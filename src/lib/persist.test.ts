@@ -832,6 +832,47 @@ describe("layer filter persistence", () => {
   });
 });
 
+describe("axis format persistence", () => {
+  it("round-trips xFormat + yFormat", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "a", y: "b" },
+          settings: { xFormat: "{:num %.2f}", yFormat: "{:time %Y-%m}" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      xFormat: "{:num %.2f}",
+      yFormat: "{:time %Y-%m}",
+    });
+  });
+
+  it("empty-string xFormat / yFormat are dropped from the short form", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "a", y: "b" },
+          settings: { xFormat: "", yFormat: "" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toBeUndefined();
+  });
+});
+
 describe("activePanel persistence", () => {
   it("round-trips a layer-kind activePanel (id resolves to an existing layer)", async () => {
     const ap: ActivePanel = { kind: "layer", layerId: "L1" };

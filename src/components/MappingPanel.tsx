@@ -326,10 +326,23 @@ export function MappingPanel({
               />
             </div>
           )}
-          {(aes === "x" ||
-            aes === "y" ||
-            aes === "facet_col" ||
-            aes === "facet_row") && (
+          {(aes === "x" || aes === "y") && (
+            <div className="space-y-3 p-3">
+              <AxisFormatField
+                aes={aes}
+                value={
+                  (aes === "x" ? settings.xFormat : settings.yFormat) ?? ""
+                }
+                onChange={(v) => {
+                  const next = { ...settings };
+                  if (v) next[aes === "x" ? "xFormat" : "yFormat"] = v;
+                  else delete next[aes === "x" ? "xFormat" : "yFormat"];
+                  onChangeSettings(next);
+                }}
+              />
+            </div>
+          )}
+          {(aes === "facet_col" || aes === "facet_row") && (
             <p className="p-3 font-mono text-xs text-stone-500">
               No settings yet for this aesthetic.
             </p>
@@ -814,5 +827,58 @@ function CloseIcon() {
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
+  );
+}
+
+/** Per-axis break-label formatter. Emits a standalone `SCALE x RENAMING * =>
+ *  '<template>'` (or `y`). Templates use ggsql's break-format tokens — `{}`
+ *  (bare echo), `{:UPPER}`, `{:lower}`, `{:Title}`, `{:num <printf>}`,
+ *  `{:time <strftime>}`. See the docs link in the helper text for the full
+ *  reference. Empty input clears the field; the SCALE clause is then omitted. */
+function AxisFormatField({
+  aes,
+  value,
+  onChange,
+}: {
+  aes: "x" | "y";
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block">
+        <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
+          <span>Format ({aes})</span>
+          <span className="text-[10px] text-stone-500">
+            {value.trim() ? "set" : "off"}
+          </span>
+        </span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="{:num %.2f}"
+          spellCheck={false}
+          className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
+        />
+      </label>
+      <p className="mt-1 font-mono text-[10px] leading-relaxed text-stone-500">
+        Break-format template applied to tick labels. Tokens:{" "}
+        <code className="text-stone-700">{`{}`}</code>,{" "}
+        <code className="text-stone-700">{`{:UPPER}`}</code>,{" "}
+        <code className="text-stone-700">{`{:lower}`}</code>,{" "}
+        <code className="text-stone-700">{`{:Title}`}</code>,{" "}
+        <code className="text-stone-700">{`{:num %.2f}`}</code>,{" "}
+        <code className="text-stone-700">{`{:time %Y-%m-%d}`}</code>.{" "}
+        <a
+          href="https://ggsql.org/syntax/clause/scale.html#break-formatting"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-sky-600 underline hover:text-sky-800"
+        >
+          Docs ↗
+        </a>
+      </p>
+    </div>
   );
 }

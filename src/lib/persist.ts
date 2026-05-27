@@ -100,6 +100,9 @@ interface ShortLayerSettings {
   /** Per-layer FILTER predicate (LayerSettings.filter). Short key intentionally
    *  distinct from `f` (fill) — `flt` for filter. */
   flt?: string;
+  /** X/Y axis break-formatter templates (LayerSettings.xFormat / yFormat). */
+  xfmt?: string;
+  yfmt?: string;
   slp?: number;
   o?: number;
   z?: number;
@@ -195,6 +198,10 @@ function encodeLayerSettings(
     out.rt = s.rotation;
   if (typeof s.format === "string" && s.format.length > 0) out.fmt = s.format;
   if (typeof s.filter === "string" && s.filter.length > 0) out.flt = s.filter;
+  if (typeof s.xFormat === "string" && s.xFormat.length > 0)
+    out.xfmt = s.xFormat;
+  if (typeof s.yFormat === "string" && s.yFormat.length > 0)
+    out.yfmt = s.yFormat;
   if (typeof s.slope === "number" && !Number.isNaN(s.slope))
     out.slp = s.slope;
   if (typeof s.opacity === "number" && !Number.isNaN(s.opacity)) out.o = s.opacity;
@@ -326,6 +333,8 @@ function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
   if (typeof r.rt === "number" && !Number.isNaN(r.rt)) out.rotation = r.rt;
   if (typeof r.fmt === "string") out.format = r.fmt;
   if (typeof r.flt === "string") out.filter = r.flt;
+  if (typeof r.xfmt === "string") out.xFormat = r.xfmt;
+  if (typeof r.yfmt === "string") out.yFormat = r.yfmt;
   if (typeof r.slp === "number" && !Number.isNaN(r.slp)) out.slope = r.slp;
   if (typeof r.o === "number" && !Number.isNaN(r.o)) out.opacity = r.o;
   if (typeof r.z === "number" && !Number.isNaN(r.z)) out.size = r.z;

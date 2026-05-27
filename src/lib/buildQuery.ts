@@ -97,6 +97,14 @@ export interface LayerSettings {
    *  tail of the DRAW clause. Free-form passthrough — ggsql parses + validates
    *  it. Empty / whitespace-only is dropped. */
   filter?: string;
+  /** Axis-tick break formatter for the X axis. Emitted as a standalone
+   *  `SCALE x RENAMING * => '<template>'` clause. Templates use the ggsql
+   *  break-format tokens — see
+   *  https://ggsql.org/syntax/clause/scale.html#break-formatting. One clause
+   *  per chart: first non-empty value across enabled layers wins. */
+  xFormat?: string;
+  /** Same as `xFormat`, for the Y axis. */
+  yFormat?: string;
   slope?: number;
   opacity?: number;
   size?: number;
@@ -259,6 +267,20 @@ const layerSettingClause = (s: LayerSettings | undefined): string => {
   return entries.length ? ` SETTING ${settingPairs(entries)}` : "";
 };
 
+/** Emit the optional `SCALE <aes> RENAMING * => '<template>'` break-formatter
+ *  for the X / Y axis. ggsql allows one RENAMING per scale; with multiple
+ *  layers we follow the same "first non-empty wins" rule used by palettes —
+ *  the chart has shared axes regardless of how many layers contribute. */
+function axisFormatClauseFor(aes: "x" | "y", layers: Layer[]): string[] {
+  const key = aes === "x" ? "xFormat" : "yFormat";
+  for (const l of layers) {
+    if (l.disabled || !l.settings) continue;
+    const v = l.settings[key]?.trim();
+    if (v) return [`SCALE ${aes} RENAMING * => '${escSql(v)}'`];
+  }
+  return [];
+}
+
 function scaleClausesFor(aes: "fill" | "stroke", layers: Layer[]): string[] {
   const discreteKey =
     aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
@@ -373,6 +395,8 @@ export function buildQuery(
   const scaleLines: string[] = [
     ...scaleClausesFor("fill", layers),
     ...scaleClausesFor("stroke", layers),
+    ...axisFormatClauseFor("x", layers),
+    ...axisFormatClauseFor("y", layers),
   ];
 
   const sharedPairs = sharedMappings

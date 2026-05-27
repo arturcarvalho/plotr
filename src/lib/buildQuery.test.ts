@@ -1800,3 +1800,184 @@ describe("buildQuery emits per-layer FILTER", () => {
     expect(q).toContain("FILTER sex = 'female' AND body_mass > 4000");
   });
 });
+
+describe("buildQuery emits SCALE … RENAMING for axis formatters", () => {
+  it("xFormat emits SCALE x RENAMING * => '<template>'", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "{:num %.2f}" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE x RENAMING * => '{:num %.2f}'");
+  });
+
+  it("yFormat emits SCALE y RENAMING * => '<template>'", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { yFormat: "{:time %Y-%m}" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE y RENAMING * => '{:time %Y-%m}'");
+  });
+
+  it("both formatters appear in x-then-y order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "{:num %.2f}", yFormat: "{:num %.1f}" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    const xIdx = q!.indexOf("SCALE x RENAMING");
+    const yIdx = q!.indexOf("SCALE y RENAMING");
+    expect(xIdx).toBeGreaterThan(-1);
+    expect(yIdx).toBeGreaterThan(-1);
+    expect(xIdx).toBeLessThan(yIdx);
+  });
+
+  it("first non-empty xFormat across layers wins", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L1",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+        },
+        {
+          id: "L2",
+          draw: "smooth",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "{:num %.2f}" },
+        },
+        {
+          id: "L3",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "{:num %.5f}" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE x RENAMING * => '{:num %.2f}'");
+    expect(q).not.toContain("{:num %.5f}");
+  });
+
+  it("disabled layer's xFormat is ignored", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L1",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "{:UPPER}" },
+          disabled: true,
+        },
+        {
+          id: "L2",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "{:Title}" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE x RENAMING * => '{:Title}'");
+    expect(q).not.toContain("{:UPPER}");
+  });
+
+  it("empty / whitespace-only xFormat emits no SCALE x RENAMING clause", () => {
+    const empty = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(empty).not.toContain("RENAMING");
+
+    const ws = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "  \t  " },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(ws).not.toContain("RENAMING");
+  });
+
+  it("single-quote in the template is SQL-escaped (doubled)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { xFormat: "it's {}" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE x RENAMING * => 'it''s {}'");
+  });
+
+  it("axis SCALE coexists with palette SCALE clauses (palettes still emit unchanged)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+          settings: {
+            xFormat: "{:num %.2f}",
+            fillPaletteDiscrete: "ggsql10",
+          },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE fill TO ggsql10");
+    expect(q).toContain("SCALE x RENAMING * => '{:num %.2f}'");
+  });
+});
