@@ -493,19 +493,23 @@ export function ChartTypePanel({
                     })
                   }
                 />
-                <AnchorGrid
-                  hjust={settings.hjust}
-                  vjust={settings.vjust}
-                  onChange={(h, v) =>
-                    onChangeSettings({ ...settings, hjust: h, vjust: v })
-                  }
-                />
-                <OffsetField
-                  value={settings.offset ?? null}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, offset: v ?? undefined })
-                  }
-                />
+                <div className="flex items-start gap-3">
+                  <AnchorGrid
+                    hjust={settings.hjust}
+                    vjust={settings.vjust}
+                    onChange={(h, v) =>
+                      onChangeSettings({ ...settings, hjust: h, vjust: v })
+                    }
+                  />
+                  <div className="flex-1">
+                    <OffsetField
+                      value={settings.offset ?? null}
+                      onChange={(v) =>
+                        onChangeSettings({ ...settings, offset: v ?? undefined })
+                      }
+                    />
+                  </div>
+                </div>
                 <NumberSliderField
                   label="Rotation"
                   value={settings.rotation ?? null}
@@ -878,10 +882,10 @@ function NumberSliderField({
   );
 }
 
-// Two side-by-side number inputs binding independently to `{ x?, y? }`. A
-// blank input stays blank — no phantom zero — and the ggsql emitter zero-fills
-// only when one axis is set and the other isn't. × clears both back to
-// undefined (no `offset` setting emitted).
+// Two number inputs binding independently to `{ x?, y? }`, stacked X-over-Y.
+// A blank input stays blank — no phantom zero — and the ggsql emitter
+// zero-fills only when one axis is set and the other isn't. × in the header
+// clears both back to undefined (no `offset` setting emitted).
 function OffsetField({
   value,
   onChange,
@@ -901,18 +905,25 @@ function OffsetField({
     if (ny !== undefined) next.y = ny;
     onChange(next);
   };
-  const hint =
-    value === null
-      ? "default (none)"
-      : `(${value.x ?? 0}, ${value.y ?? 0})`;
   return (
     <div>
-      <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
-        <span>Offset (pts)</span>
-        <span className="text-[10px] text-stone-500">{hint}</span>
-      </span>
-      <div className="flex items-center gap-2">
-        <label className="flex flex-1 items-center gap-1 font-mono text-[10px] text-stone-500">
+      <div className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
+        <span>Offset</span>
+        {value !== null ? (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
+            title="Reset to default"
+          >
+            ×
+          </button>
+        ) : (
+          <span className="text-[10px] text-stone-500">default (none)</span>
+        )}
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="flex w-full items-center gap-1 font-mono text-[10px] text-stone-500">
           x
           <input
             type="number"
@@ -925,7 +936,7 @@ function OffsetField({
             className="w-full rounded border border-stone-300 px-2 py-0.5 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
           />
         </label>
-        <label className="flex flex-1 items-center gap-1 font-mono text-[10px] text-stone-500">
+        <label className="flex w-full items-center gap-1 font-mono text-[10px] text-stone-500">
           y
           <input
             type="number"
@@ -938,16 +949,6 @@ function OffsetField({
             className="w-full rounded border border-stone-300 px-2 py-0.5 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
           />
         </label>
-        {value !== null && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
-        )}
       </div>
     </div>
   );
