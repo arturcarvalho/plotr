@@ -246,10 +246,10 @@ Each table lists the geom's full set of aesthetic defaults plus geom-specific pa
 | fontsize   | 11.0     |                                |
 | fontweight | normal   | CSS keywords or numeric        |
 | italic     | false    |                                |
-| hjust      | 0.5      | horizontal justification       |
-| vjust      | 0.5      | vertical justification         |
+| hjust      | centre   | 'left' \| 'centre' \| 'right'  |
+| vjust      | middle   | 'top' \| 'middle' \| 'bottom'  |
 | rotation   | 0.0      | degrees                        |
-| offset     | null     | optional [x, y]                |
+| offset     | null     | tuple (x, y) in absolute pts   |
 | format     | null     | format string template         |
 | position   | identity |                                |
 

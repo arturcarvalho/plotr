@@ -139,8 +139,9 @@ describe("serialize / deserialize round-trip", () => {
           mappings: { x: "a", y: "b", label: "c" },
           settings: {
             italic: true,
-            hjust: 0.3,
-            vjust: 0.7,
+            hjust: "left",
+            vjust: "top",
+            offset: { x: 0, y: -11 },
             rotation: 45,
             format: "%.2f",
           },
@@ -153,10 +154,98 @@ describe("serialize / deserialize round-trip", () => {
     });
     expect((await deserialize(s))?.layers[0].settings).toEqual({
       italic: true,
-      hjust: 0.3,
-      vjust: 0.7,
+      hjust: "left",
+      vjust: "top",
+      offset: { x: 0, y: -11 },
       rotation: 45,
       format: "%.2f",
+    });
+  });
+
+  it("partial offset (single axis) round-trips", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "a", y: "b", label: "c" },
+          settings: { offset: { y: -7 } },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      offset: { y: -7 },
+    });
+  });
+
+  it("legacy numeric hj/vj are silently dropped on decode", async () => {
+    // Pre-change URLs carried hjust/vjust as numbers under hj/vj. The new
+    // decoder only accepts the string enum, so the numeric values fall away
+    // and the remaining settings round-trip intact.
+    const hash = await wrap({
+      L: [
+        {
+          i: "L",
+          d: "text",
+          m: { x: "a", y: "b", label: "c" },
+          s: { it: true, hj: 0.3, vj: 0.7, rt: 45, fmt: "%.2f" },
+        },
+      ],
+    });
+    const got = await deserialize(hash);
+    expect(got?.layers[0].settings).toEqual({
+      italic: true,
+      rotation: 45,
+      format: "%.2f",
+    });
+  });
+
+  it("bogus hjust/vjust strings are rejected", async () => {
+    const hash = await wrap({
+      L: [
+        {
+          i: "L",
+          d: "text",
+          m: { x: "a", y: "b", label: "c" },
+          s: { hj: "diagonal", vj: "middle" },
+        },
+      ],
+    });
+    const got = await deserialize(hash);
+    // 'diagonal' is not a valid Hjust; only 'middle' (valid Vjust) survives.
+    expect(got?.layers[0].settings).toEqual({ vjust: "middle" });
+  });
+
+  it("malformed offset is rejected on decode", async () => {
+    const arrayShape = await wrap({
+      L: [
+        {
+          i: "L",
+          d: "text",
+          m: { x: "a", y: "b", label: "c" },
+          s: { of: [1, 2] },
+        },
+      ],
+    });
+    expect((await deserialize(arrayShape))?.layers[0].settings).toBeUndefined();
+
+    const nonNumeric = await wrap({
+      L: [
+        {
+          i: "L",
+          d: "text",
+          m: { x: "a", y: "b", label: "c" },
+          s: { of: { x: "nope", y: 5 } },
+        },
+      ],
+    });
+    // Only the valid `y` survives; the bogus `x` is dropped.
+    expect((await deserialize(nonNumeric))?.layers[0].settings).toEqual({
+      offset: { y: 5 },
     });
   });
 

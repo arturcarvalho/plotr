@@ -3,12 +3,16 @@ import {
   AUTO,
   DRAW_TYPES,
   FACETS,
+  HJUST_VALUES,
+  VJUST_VALUES,
   type Aes,
   type CustomLayer,
+  type Hjust,
   type LabelsLayer,
   type Layer,
   type LayerSettings,
   type ProjectSettings,
+  type Vjust,
 } from "./buildQuery";
 
 /** UI side-panel selection (3rd column in the build pane). Null = nothing
@@ -93,8 +97,11 @@ interface ShortLayerSettings {
   ot?: boolean;
   cf?: number;
   it?: boolean;
-  hj?: number;
-  vj?: number;
+  hj?: string;
+  vj?: string;
+  /** Partial offset record mirroring `LayerSettings.offset`. Each axis is
+   *  independent so the UI can keep a side blank without zero-filling. */
+  of?: { x?: number; y?: number };
   rt?: number;
   fmt?: string;
   /** Per-layer FILTER predicate (LayerSettings.filter). Short key intentionally
@@ -192,8 +199,18 @@ function encodeLayerSettings(
   if (typeof s.outliers === "boolean") out.ot = s.outliers;
   if (typeof s.coef === "number" && !Number.isNaN(s.coef)) out.cf = s.coef;
   if (typeof s.italic === "boolean") out.it = s.italic;
-  if (typeof s.hjust === "number" && !Number.isNaN(s.hjust)) out.hj = s.hjust;
-  if (typeof s.vjust === "number" && !Number.isNaN(s.vjust)) out.vj = s.vjust;
+  if (typeof s.hjust === "string") out.hj = s.hjust;
+  if (typeof s.vjust === "string") out.vj = s.vjust;
+  if (s.offset && typeof s.offset === "object") {
+    const o: { x?: number; y?: number } = {};
+    if (typeof s.offset.x === "number" && !Number.isNaN(s.offset.x)) {
+      o.x = s.offset.x;
+    }
+    if (typeof s.offset.y === "number" && !Number.isNaN(s.offset.y)) {
+      o.y = s.offset.y;
+    }
+    if (o.x !== undefined || o.y !== undefined) out.of = o;
+  }
   if (typeof s.rotation === "number" && !Number.isNaN(s.rotation))
     out.rt = s.rotation;
   if (typeof s.format === "string" && s.format.length > 0) out.fmt = s.format;
@@ -328,8 +345,19 @@ function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
   if (typeof r.ot === "boolean") out.outliers = r.ot;
   if (typeof r.cf === "number" && !Number.isNaN(r.cf)) out.coef = r.cf;
   if (typeof r.it === "boolean") out.italic = r.it;
-  if (typeof r.hj === "number" && !Number.isNaN(r.hj)) out.hjust = r.hj;
-  if (typeof r.vj === "number" && !Number.isNaN(r.vj)) out.vjust = r.vj;
+  if (typeof r.hj === "string" && (HJUST_VALUES as readonly string[]).includes(r.hj)) {
+    out.hjust = r.hj as Hjust;
+  }
+  if (typeof r.vj === "string" && (VJUST_VALUES as readonly string[]).includes(r.vj)) {
+    out.vjust = r.vj as Vjust;
+  }
+  if (r.of && typeof r.of === "object" && !Array.isArray(r.of)) {
+    const raw = r.of as { x?: unknown; y?: unknown };
+    const o: { x?: number; y?: number } = {};
+    if (typeof raw.x === "number" && !Number.isNaN(raw.x)) o.x = raw.x;
+    if (typeof raw.y === "number" && !Number.isNaN(raw.y)) o.y = raw.y;
+    if (o.x !== undefined || o.y !== undefined) out.offset = o;
+  }
   if (typeof r.rt === "number" && !Number.isNaN(r.rt)) out.rotation = r.rt;
   if (typeof r.fmt === "string") out.format = r.fmt;
   if (typeof r.flt === "string") out.filter = r.flt;

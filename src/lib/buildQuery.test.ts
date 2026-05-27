@@ -570,8 +570,9 @@ describe("buildQuery emits per-layer SETTING", () => {
           settings: {
             position: "identity",
             italic: true,
-            hjust: 0.3,
-            vjust: 0.7,
+            hjust: "left",
+            vjust: "top",
+            offset: { x: 0, y: -11 },
             rotation: 45,
             format: "%.2f",
           },
@@ -581,8 +582,97 @@ describe("buildQuery emits per-layer SETTING", () => {
       COLS,
     );
     expect(q).toContain(
-      "DRAW text MAPPING bill_len AS x, bill_dep AS y, species AS label SETTING position => 'identity', italic => true, hjust => 0.3, vjust => 0.7, rotation => 45, format => '%.2f'",
+      "DRAW text MAPPING bill_len AS x, bill_dep AS y, species AS label SETTING position => 'identity', italic => true, hjust => 'left', vjust => 'top', offset => (0, -11), rotation => 45, format => '%.2f'",
     );
+  });
+
+  it("emits text offset alone (no anchors)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+          settings: { offset: { x: 5, y: 5 } },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW text MAPPING bill_len AS x, bill_dep AS y, species AS label SETTING offset => (5, 5)",
+    );
+  });
+
+  it("emits text anchors alone (no offset)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+          settings: { hjust: "centre", vjust: "middle" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW text MAPPING bill_len AS x, bill_dep AS y, species AS label SETTING hjust => 'centre', vjust => 'middle'",
+    );
+    expect(q).not.toContain("offset");
+  });
+
+  it("zero-fills missing offset axis at emission only", () => {
+    const qx = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+          settings: { offset: { x: 5 } },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(qx).toContain("offset => (5, 0)");
+
+    const qy = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+          settings: { offset: { y: -11 } },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(qy).toContain("offset => (0, -11)");
+  });
+
+  it("drops offset entirely when both axes are undefined", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "text",
+          mappings: { x: "bill_len", y: "bill_dep", label: "species" },
+          settings: { offset: {} },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("offset");
+    expect(q).not.toContain("SETTING");
   });
 
   it("emits density's full geom-specific stack in canonical order", () => {

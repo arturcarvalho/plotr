@@ -17,6 +17,9 @@ import Select, {
 import {
   chartLabel,
   DRAW_TYPES,
+  HJUST_VALUES,
+  VJUST_VALUES,
+  type Hjust,
   type HistogramClosed,
   type Kernel,
   type LayerSettings,
@@ -25,6 +28,7 @@ import {
   type ProjectSettings,
   type SmoothMethod,
   type ViolinSide,
+  type Vjust,
 } from "../lib/buildQuery";
 import { drawRequirements } from "../lib/autoChart";
 import { ChartIcon } from "./ChartIcon";
@@ -491,22 +495,28 @@ export function ChartTypePanel({
                     })
                   }
                 />
-                <NumberInputField
-                  label="Horizontal offset"
+                <RadioField<Hjust>
+                  label="Horizontal anchor"
                   value={settings.hjust ?? null}
-                  defaultLabel="0.5"
-                  step={0.05}
+                  defaultLabel="centre"
+                  options={[...HJUST_VALUES]}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, hjust: v ?? undefined })
                   }
                 />
-                <NumberInputField
-                  label="Vertical offset"
+                <RadioField<Vjust>
+                  label="Vertical anchor"
                   value={settings.vjust ?? null}
-                  defaultLabel="0.5"
-                  step={0.05}
+                  defaultLabel="middle"
+                  options={[...VJUST_VALUES]}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, vjust: v ?? undefined })
+                  }
+                />
+                <OffsetField
+                  value={settings.offset ?? null}
+                  onChange={(v) =>
+                    onChangeSettings({ ...settings, offset: v ?? undefined })
                   }
                 />
                 <NumberSliderField
@@ -878,6 +888,81 @@ function NumberSliderField({
         )}
       </div>
     </label>
+  );
+}
+
+// Two side-by-side number inputs binding independently to `{ x?, y? }`. A
+// blank input stays blank — no phantom zero — and the ggsql emitter zero-fills
+// only when one axis is set and the other isn't. × clears both back to
+// undefined (no `offset` setting emitted).
+function OffsetField({
+  value,
+  onChange,
+}: {
+  value: { x?: number; y?: number } | null;
+  onChange: (v: { x?: number; y?: number } | null) => void;
+}) {
+  const x = value?.x;
+  const y = value?.y;
+  const update = (nx: number | undefined, ny: number | undefined) => {
+    if (nx === undefined && ny === undefined) {
+      onChange(null);
+      return;
+    }
+    const next: { x?: number; y?: number } = {};
+    if (nx !== undefined) next.x = nx;
+    if (ny !== undefined) next.y = ny;
+    onChange(next);
+  };
+  const hint =
+    value === null
+      ? "default (none)"
+      : `(${value.x ?? 0}, ${value.y ?? 0})`;
+  return (
+    <div>
+      <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
+        <span>Offset (pts)</span>
+        <span className="text-[10px] text-stone-500">{hint}</span>
+      </span>
+      <div className="flex items-center gap-2">
+        <label className="flex flex-1 items-center gap-1 font-mono text-[10px] text-stone-500">
+          x
+          <input
+            type="number"
+            value={x ?? ""}
+            step={1}
+            onChange={(e) => {
+              const v = e.target.value;
+              update(v === "" ? undefined : Number(v), y);
+            }}
+            className="w-full rounded border border-stone-300 px-2 py-0.5 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-1 items-center gap-1 font-mono text-[10px] text-stone-500">
+          y
+          <input
+            type="number"
+            value={y ?? ""}
+            step={1}
+            onChange={(e) => {
+              const v = e.target.value;
+              update(x, v === "" ? undefined : Number(v));
+            }}
+            className="w-full rounded border border-stone-300 px-2 py-0.5 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
+          />
+        </label>
+        {value !== null && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
+            title="Reset to default"
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

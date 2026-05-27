@@ -69,6 +69,10 @@ export type Kernel =
 export type ViolinSide = "both" | "left" | "top" | "right" | "bottom";
 export type HistogramClosed = "right" | "left";
 export type SmoothMethod = "nw" | "nadaraya-watson" | "ols" | "tls";
+export type Hjust = "left" | "centre" | "right";
+export type Vjust = "top" | "middle" | "bottom";
+export const HJUST_VALUES: readonly Hjust[] = ["left", "centre", "right"];
+export const VJUST_VALUES: readonly Vjust[] = ["top", "middle", "bottom"];
 
 export interface LayerSettings {
   width?: number;
@@ -89,8 +93,14 @@ export interface LayerSettings {
   outliers?: boolean;
   coef?: number;
   italic?: boolean;
-  hjust?: number;
-  vjust?: number;
+  hjust?: Hjust;
+  vjust?: Vjust;
+  /** Absolute-point nudge applied on top of the (hjust, vjust) anchor.
+   *  Each axis is independently optional in the model so the UI can leave a
+   *  blank input blank; the emitter zero-fills missing axes only at the
+   *  ggsql boundary (`offset => (x ?? 0, y ?? 0)`). Both unset = no offset
+   *  setting at all. */
+  offset?: { x?: number; y?: number };
   rotation?: number;
   format?: string;
   /** Per-layer SQL WHERE-style predicate emitted as `FILTER <expr>` at the
@@ -210,6 +220,14 @@ const escSql = (s: string) => s.replace(/'/g, "''");
 const formatSettingValue = (v: unknown): string => {
   if (typeof v === "string") return `'${escSql(v)}'`;
   if (typeof v === "boolean") return v ? "true" : "false";
+  if (
+    Array.isArray(v) &&
+    v.length === 2 &&
+    typeof v[0] === "number" &&
+    typeof v[1] === "number"
+  ) {
+    return `(${v[0]}, ${v[1]})`;
+  }
   return String(v);
 };
 
@@ -237,6 +255,7 @@ const SETTING_ORDER = [
   "italic",
   "hjust",
   "vjust",
+  "offset",
   "rotation",
   "format",
   "slope",
@@ -260,6 +279,15 @@ const layerSettingClause = (s: LayerSettings | undefined): string => {
     // noFill / noStroke push an explicit `null` below; skip the colour entry.
     if (k === "fill" && s.noFill) continue;
     if (k === "stroke" && s.noStroke) continue;
+    if (k === "offset") {
+      // Stored as `{ x?, y? }`; emit `(x ?? 0, y ?? 0)` whenever either axis
+      // is set. Both undefined → drop the setting entirely.
+      const o = s.offset;
+      if (o && (o.x !== undefined || o.y !== undefined)) {
+        entries.push(["offset", [o.x ?? 0, o.y ?? 0]]);
+      }
+      continue;
+    }
     if (s[k] !== undefined && s[k] !== null) entries.push([k, s[k]]);
   }
   if (s.noFill) entries.push(["fill", null]);
