@@ -17,8 +17,6 @@ import Select, {
 import {
   chartLabel,
   DRAW_TYPES,
-  HJUST_VALUES,
-  VJUST_VALUES,
   type Hjust,
   type HistogramClosed,
   type Kernel,
@@ -495,22 +493,11 @@ export function ChartTypePanel({
                     })
                   }
                 />
-                <RadioField<Hjust>
-                  label="Horizontal anchor"
-                  value={settings.hjust ?? null}
-                  defaultLabel="centre"
-                  options={[...HJUST_VALUES]}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, hjust: v ?? undefined })
-                  }
-                />
-                <RadioField<Vjust>
-                  label="Vertical anchor"
-                  value={settings.vjust ?? null}
-                  defaultLabel="middle"
-                  options={[...VJUST_VALUES]}
-                  onChange={(v) =>
-                    onChangeSettings({ ...settings, vjust: v ?? undefined })
+                <AnchorGrid
+                  hjust={settings.hjust}
+                  vjust={settings.vjust}
+                  onChange={(h, v) =>
+                    onChangeSettings({ ...settings, hjust: h, vjust: v })
                   }
                 />
                 <OffsetField
@@ -1134,6 +1121,71 @@ function RadioField<T extends string>({
         ))}
       </div>
     </fieldset>
+  );
+}
+
+// Single 3×3 dot-grid that writes both `hjust` and `vjust` from one click.
+// Rows are vjust (top / middle / bottom); columns are hjust (left / centre /
+// right). Selecting always sets both axes; × clears both back to undefined so
+// ggsql falls back to its centre/middle defaults.
+function AnchorGrid({
+  hjust,
+  vjust,
+  onChange,
+}: {
+  hjust: Hjust | undefined;
+  vjust: Vjust | undefined;
+  onChange: (h: Hjust | undefined, v: Vjust | undefined) => void;
+}) {
+  const rows: Vjust[] = ["top", "middle", "bottom"];
+  const cols: Hjust[] = ["left", "centre", "right"];
+  const isSet = hjust !== undefined || vjust !== undefined;
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
+        <span>Anchor</span>
+        {isSet ? (
+          <button
+            type="button"
+            onClick={() => onChange(undefined, undefined)}
+            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
+            title="Reset to default"
+          >
+            ×
+          </button>
+        ) : (
+          <span className="text-[10px] text-stone-500">
+            default (centre, middle)
+          </span>
+        )}
+      </div>
+      <div className="inline-block rounded-md border border-stone-200 bg-stone-50 p-2">
+        <div className="grid grid-cols-3 grid-rows-3 place-items-center gap-1">
+          {rows.flatMap((v) =>
+            cols.map((h) => {
+              const selected = hjust === h && vjust === v;
+              return (
+                <button
+                  key={`${h}-${v}`}
+                  type="button"
+                  onClick={() => onChange(h, v)}
+                  className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-stone-100"
+                  title={`hjust: ${h}, vjust: ${v}`}
+                >
+                  <span
+                    className={
+                      selected
+                        ? "block h-2 w-2 rounded-full bg-stone-900"
+                        : "block h-1.5 w-1.5 rounded-full bg-stone-300"
+                    }
+                  />
+                </button>
+              );
+            }),
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
