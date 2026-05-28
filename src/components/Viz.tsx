@@ -78,7 +78,7 @@ export function NoDataCard({ variables }: { variables: NoDataVariable[] }) {
       <div className="font-semibold text-stone-800">No data selected</div>
       {variables.length > 0 && (
         <>
-          <div className="text-stone-500">This chart uses:</div>
+          <div className="text-stone-500">A chart is defined, but the data is missing. The chart needs:</div>
           <ul className="space-y-1">
             {variables.map((v) => (
               <li key={v.name} className="flex items-center gap-2">
@@ -92,7 +92,7 @@ export function NoDataCard({ variables }: { variables: NoDataVariable[] }) {
         </>
       )}
       <div className="text-stone-500">
-        Drop a CSV in the sidebar to render.
+        Choose data in the sidebar to render the chart.
       </div>
     </div>
   );
