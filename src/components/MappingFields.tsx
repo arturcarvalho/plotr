@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Aes } from "../lib/buildQuery";
 import { Dropzone } from "./Dropzone";
 
@@ -45,7 +45,27 @@ export function MappingFields({
     />
   );
 
-  const row = (aes: Aes, placeholder?: string) => (
+  // Standalone labelled mapping row — the whole Field (label + padding +
+  // dropzone-row) is one click target. Used for every aesthetic except
+  // facet_row / facet_col, which sit inside the shared "Panels" Field and
+  // don't get their own outer label.
+  const labeledField = (aes: Aes, label: string, placeholder?: string) => (
+    <Field
+      label={label}
+      missing={isMissing(aes)}
+      open={openMappingAes === aes}
+      onToggleSettings={
+        onToggleSettings ? () => onToggleSettings(aes) : undefined
+      }
+    >
+      {dropzoneFor(aes, placeholder)}
+    </Field>
+  );
+
+  // Inside the "Panels" group there are two click targets (rows + columns)
+  // so the outer Field can't own a single click — each inner row needs its
+  // own button + hover region.
+  const facetRow = (aes: Aes, placeholder?: string) => (
     <DropzoneRow
       open={openMappingAes === aes}
       onToggleSettings={
@@ -59,61 +79,130 @@ export function MappingFields({
   return (
     <div className="space-y-3">
       <div data-tutorial-target="mappings">
-        <Field label="X">{row("x", "Bottom Axis")}</Field>
+        {labeledField("x", "X", "Bottom Axis")}
       </div>
-      <Field label="Y">{row("y", "Left Axis")}</Field>
+      {labeledField("y", "Y", "Left Axis")}
       {(resolvedDraw === "ribbon" || resolvedDraw === "range") && (
         <>
-          <Field label="Y min" missing={isMissing("ymin")}>
-            {row("ymin", "Lower bound")}
-          </Field>
-          <Field label="Y max" missing={isMissing("ymax")}>
-            {row("ymax", "Upper bound")}
-          </Field>
+          {labeledField("ymin", "Y min", "Lower bound")}
+          {labeledField("ymax", "Y max", "Upper bound")}
         </>
       )}
-      <Field label="Fill color">{row("fill")}</Field>
-      <Field label="Line color">{row("stroke")}</Field>
-      <Field label="Opacity">{row("opacity")}</Field>
-      <Field label="Size">{row("size")}</Field>
-      {resolvedDraw === "text" && (
-        <Field label="Label" missing={isMissing("label")}>
-          {row("label", "Text content")}
-        </Field>
-      )}
+      {labeledField("fill", "Fill color")}
+      {labeledField("stroke", "Line color")}
+      {labeledField("opacity", "Opacity")}
+      {labeledField("size", "Size")}
+      {resolvedDraw === "text" &&
+        labeledField("label", "Label", "Text content")}
       <Field label="Panels">
         <div className="space-y-1">
-          {row("facet_row", "rows")}
+          {facetRow("facet_row", "rows")}
           <div className="text-center font-mono text-[10px] text-stone-400">
             by
           </div>
-          {row("facet_col", "columns")}
+          {facetRow("facet_col", "columns")}
         </div>
       </Field>
     </div>
   );
 }
 
+// Shared visual styling for the chevron toggle button. Drives both Field
+// (label + dropzone-row) and DropzoneRow (dropzone-row only) so the four
+// open × hot states stay in sync.
+function chevronButtonClass(open: boolean, hot: boolean): string {
+  return [
+    "flex w-10 shrink-0 items-center justify-center rounded transition-colors",
+    open
+      ? hot
+        ? "bg-stone-200 text-stone-800"
+        : "bg-stone-100 text-stone-800"
+      : hot
+        ? "bg-stone-200 text-stone-700"
+        : "text-stone-400",
+  ].join(" ");
+}
+
 function Field({
   label,
   missing,
+  open,
+  onToggleSettings,
   children,
 }: {
   label: string;
   /** Renders a muted `(missing)` suffix in amber when this dropzone's
    *  aesthetic is required by the geom but not mapped. */
   missing?: boolean;
+  /** When provided, the entire Field (label + dropzone-row, minus the
+   *  dropzone itself) becomes a click target that toggles the per-aesthetic
+   *  settings panel. `open` controls the chevron-button highlight. */
+  open?: boolean;
+  onToggleSettings?: () => void;
   children: ReactNode;
 }) {
+  const [overField, setOverField] = useState(false);
+  const [overDropzone, setOverDropzone] = useState(false);
+
+  if (!onToggleSettings) {
+    return (
+      <div>
+        <div className="mb-1 font-mono text-xs font-semibold text-stone-700">
+          {label}
+          {missing && (
+            <span className="ml-1 font-normal text-amber-500">(missing)</span>
+          )}
+        </div>
+        {children}
+      </div>
+    );
+  }
+
+  const hot = overField && !overDropzone;
+
   return (
-    <div>
+    <div
+      // Outdent 8 px on each side + 4 px vertically so the click target
+      // extends past the label and past the dropzone gutter. No bg change on
+      // hover — the row stays the panel's natural background and the
+      // chevron button is the only hover affordance.
+      className="-mx-2 cursor-pointer px-2 py-1"
+      onMouseEnter={() => setOverField(true)}
+      onMouseLeave={() => {
+        setOverField(false);
+        setOverDropzone(false);
+      }}
+      onClick={() => {
+        if (!overDropzone) onToggleSettings();
+      }}
+    >
       <div className="mb-1 font-mono text-xs font-semibold text-stone-700">
         {label}
         {missing && (
           <span className="ml-1 font-normal text-amber-500">(missing)</span>
         )}
       </div>
-      {children}
+      <div className="flex items-stretch gap-1">
+        <div
+          className="flex-1 cursor-auto"
+          onMouseEnter={() => setOverDropzone(true)}
+          onMouseLeave={() => setOverDropzone(false)}
+        >
+          {children}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSettings();
+          }}
+          aria-label={open ? "Close settings" : "Open settings"}
+          title={open ? "Close settings" : "Open settings"}
+          className={chevronButtonClass(open ?? false, hot)}
+        >
+          <ChevronRightIcon />
+        </button>
+      </div>
     </div>
   );
 }
@@ -127,24 +216,45 @@ function DropzoneRow({
   onToggleSettings?: () => void;
   children: ReactNode;
 }) {
+  // Used by facet rows inside the "Panels" group: same dropzone-vs-rest
+  // hover split as Field, but without a label above to fold into the click
+  // target. The hover bg is on this row only (no -mx-2 outdent — the parent
+  // Field already wraps both facet rows).
+  const [overRow, setOverRow] = useState(false);
+  const [overDropzone, setOverDropzone] = useState(false);
+
   if (!onToggleSettings) return <>{children}</>;
+
+  const hot = overRow && !overDropzone;
+
   return (
-    <div className="flex items-stretch">
-      <div className="flex-1">{children}</div>
+    <div
+      className="flex cursor-pointer items-stretch gap-1"
+      onMouseEnter={() => setOverRow(true)}
+      onMouseLeave={() => {
+        setOverRow(false);
+        setOverDropzone(false);
+      }}
+      onClick={() => {
+        if (!overDropzone) onToggleSettings();
+      }}
+    >
+      <div
+        className="flex-1 cursor-auto"
+        onMouseEnter={() => setOverDropzone(true)}
+        onMouseLeave={() => setOverDropzone(false)}
+      >
+        {children}
+      </div>
       <button
         type="button"
-        onClick={onToggleSettings}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSettings();
+        }}
         aria-label={open ? "Close settings" : "Open settings"}
         title={open ? "Close settings" : "Open settings"}
-        className={[
-          "relative flex w-10 shrink-0 items-center justify-center rounded transition-colors",
-          // Invisible pseudo-element extends the click target ~8 px on all
-          // sides without changing layout dimensions of the row.
-          "before:absolute before:-inset-2 before:content-['']",
-          open
-            ? "bg-stone-100 text-stone-800 hover:bg-stone-200"
-            : "text-stone-400 hover:bg-stone-100 hover:text-stone-700",
-        ].join(" ")}
+        className={chevronButtonClass(open, hot)}
       >
         <ChevronRightIcon />
       </button>
