@@ -82,6 +82,56 @@ describe("serialize / deserialize round-trip", () => {
     expect((await deserialize(s))?.labels[0].disabled).toBe(true);
   });
 
+  it("columnKindsCache round-trips", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      columnKindsCache: {
+        body_mass: "numeric",
+        species: "string",
+        is_adult: "bool",
+        observed_at: "date",
+      },
+    });
+    expect((await deserialize(s))?.columnKindsCache).toEqual({
+      body_mass: "numeric",
+      species: "string",
+      is_adult: "bool",
+      observed_at: "date",
+    });
+  });
+
+  it("columnKindsCache is omitted when empty", async () => {
+    const s = await serialize({
+      layers: [],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+      columnKindsCache: {},
+    });
+    const got = await deserialize(s);
+    expect(got?.columnKindsCache).toBeUndefined();
+  });
+
+  it("columnKindsCache rejects bogus kinds on decode", async () => {
+    const hash = await wrap({
+      K: {
+        body_mass: "numeric",
+        bogus: "weird",
+        species: "string",
+      },
+    });
+    const got = await deserialize(hash);
+    expect(got?.columnKindsCache).toEqual({
+      body_mass: "numeric",
+      species: "string",
+    });
+  });
+
   it("palette settings round-trip", async () => {
     const s = await serialize({
       layers: [

@@ -14,6 +14,14 @@ import {
   type ProjectSettings,
   type Vjust,
 } from "./buildQuery";
+import type { ColumnKind } from "./ggsql";
+
+const VALID_KINDS: ReadonlySet<string> = new Set<string>([
+  "numeric",
+  "string",
+  "bool",
+  "date",
+]);
 
 /** UI side-panel selection (3rd column in the build pane). Null = nothing
  *  open; defined in persist so both App.tsx and the URL-hash codec share one
@@ -48,6 +56,11 @@ export interface Persisted {
   /** Optional. Undefined / null = collapsed. Decoder enforces the invariant
    *  that this is only present when `activePanel` is a chart layer. */
   secondaryPanel?: SecondaryPanel;
+  /** Optional name → kind cache so the no-data card can render type badges
+   *  for chart variables even after a full page reload or on a shared URL
+   *  whose CSV isn't in the recipient's IndexedDB. Additive in-session;
+   *  serialised here so the type info travels with the chart. */
+  columnKindsCache?: Record<string, ColumnKind>;
 }
 
 const VERSION = 2;
@@ -159,6 +172,8 @@ interface Payload {
   t?: string;
   A?: ShortActivePanel;
   D?: ShortSecondaryPanel;
+  /** columnKindsCache — column name → ggsql ColumnKind string. */
+  K?: Record<string, string>;
 }
 
 function encodeMappings(
@@ -562,6 +577,16 @@ export async function serialize(p: Persisted): Promise<string> {
   if (ap) payload.A = ap;
   const sp = encodeSecondaryPanel(p.secondaryPanel);
   if (sp) payload.D = sp;
+  // columnKindsCache — only store entries with a recognised kind.
+  if (p.columnKindsCache) {
+    const out: Record<string, string> = {};
+    for (const [name, kind] of Object.entries(p.columnKindsCache)) {
+      if (typeof name === "string" && name.length > 0 && VALID_KINDS.has(kind)) {
+        out[name] = kind;
+      }
+    }
+    if (Object.keys(out).length > 0) payload.K = out;
+  }
   const json = JSON.stringify(payload);
   const gz = await gzipString(json);
   return `s=${base64UrlEncode(gz)}`;
@@ -600,6 +625,7 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
     t?: unknown;
     A?: unknown;
     D?: unknown;
+    K?: unknown;
   };
   const layers = Array.isArray(obj.L)
     ? obj.L
@@ -631,5 +657,21 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
   if (activePanel) out.activePanel = activePanel;
   const secondaryPanel = decodeSecondaryPanel(obj.D, activePanel);
   if (secondaryPanel) out.secondaryPanel = secondaryPanel;
+  if (obj.K && typeof obj.K === "object" && !Array.isArray(obj.K)) {
+    const cache: Record<string, ColumnKind> = {};
+    for (const [name, kind] of Object.entries(
+      obj.K as Record<string, unknown>,
+    )) {
+      if (
+        typeof name === "string" &&
+        name.length > 0 &&
+        typeof kind === "string" &&
+        VALID_KINDS.has(kind)
+      ) {
+        cache[name] = kind as ColumnKind;
+      }
+    }
+    if (Object.keys(cache).length > 0) out.columnKindsCache = cache;
+  }
   return out;
 }

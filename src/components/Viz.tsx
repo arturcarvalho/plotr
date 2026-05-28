@@ -1,4 +1,11 @@
 import { forwardRef } from "react";
+import type { ColumnKind } from "../lib/ggsql";
+import { ColumnKindBadge } from "./ColumnKindBadge";
+
+export interface NoDataVariable {
+  name: string;
+  kind: ColumnKind | null;
+}
 
 interface Props {
   hasError: boolean;
@@ -57,3 +64,36 @@ export const Viz = forwardRef<HTMLDivElement, Props>(
   },
 );
 Viz.displayName = "Viz";
+
+/**
+ * "No data selected" card rendered at the section level when the chart is
+ * configured but no CSV is loaded. The whole right-hand area collapses to just
+ * this card. Uses `bg-stone-50` (a dimmed off-white) and no shadow so it sits
+ * gently on the stone-100 app chrome instead of competing with the rest of the
+ * UI. Variables whose `kind` is null render as plain names.
+ */
+export function NoDataCard({ variables }: { variables: NoDataVariable[] }) {
+  return (
+    <div className="max-w-xs space-y-3 rounded-lg border border-stone-300 bg-stone-50 px-4 py-3 font-mono text-xs text-stone-700">
+      <div className="font-semibold text-stone-800">No data selected</div>
+      {variables.length > 0 && (
+        <>
+          <div className="text-stone-500">This chart uses:</div>
+          <ul className="space-y-1">
+            {variables.map((v) => (
+              <li key={v.name} className="flex items-center gap-2">
+                <ColumnKindBadge kind={v.kind} />
+                <span className="truncate" title={v.name}>
+                  {v.name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="text-stone-500">
+        Drop a CSV in the sidebar to render.
+      </div>
+    </div>
+  );
+}

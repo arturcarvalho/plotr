@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { ColumnInfo, ColumnKind } from "../lib/ggsql";
+import { ColumnKindBadge } from "./ColumnKindBadge";
 import { Tooltip } from "./Tooltip";
 
 interface Props {
@@ -10,13 +11,6 @@ interface Props {
   onLoadPenguins: () => void;
   onResetFile: () => void;
 }
-
-const GLYPH: Record<ColumnKind, string> = {
-  numeric: "#",
-  string: "T",
-  bool: "✓",
-  date: "📅",
-};
 
 const TYPE_LABEL: Record<ColumnKind, string> = {
   numeric: "num",
@@ -252,21 +246,7 @@ function Section({
             }}
             className="flex cursor-grab items-center gap-2 px-3 py-1 hover:bg-stone-100 active:cursor-grabbing"
           >
-            <span
-              className={[
-                "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded font-mono text-[11px] font-bold",
-                col.kind === "numeric"
-                  ? "bg-sky-100 text-sky-700"
-                  : col.kind === "bool"
-                    ? "bg-emerald-100 text-emerald-700"
-                    : col.kind === "date"
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-stone-200 text-stone-700",
-              ].join(" ")}
-              title={col.kind}
-            >
-              {GLYPH[col.kind]}
-            </span>
+            <ColumnKindBadge kind={col.kind} />
             <span
               className="flex-1 truncate font-mono text-xs text-stone-800"
               title={col.name}

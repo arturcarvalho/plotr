@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import vegaEmbed from "vega-embed";
 import { Warn } from "vega";
-import { ggsql, type ColumnInfo } from "./lib/ggsql";
+import { ggsql, type ColumnInfo, type ColumnKind } from "./lib/ggsql";
 import {
+  AESTHETICS,
   AUTO,
   buildQuery,
+  FACETS,
   UNIVERSAL_AESTHETICS,
   type Aes,
   type CustomLayer,
@@ -42,7 +44,7 @@ import {
   SHARED_MAPPINGS_KEY,
   SharedMappingsPanel,
 } from "./components/SharedMappingsPanel";
-import { Viz } from "./components/Viz";
+import { NoDataCard, Viz } from "./components/Viz";
 import { ProblemsPanel } from "./components/ProblemsPanel";
 import { TutorialOverlay } from "./components/Tutorial";
 import { isSeen, markSeen } from "./lib/tutorial";
@@ -81,6 +83,13 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
+  // Additive in-memory cache of column name → kind. Seeded each time a table's
+  // schema lands so the no-data card can still render type badges after the
+  // user resets the file. Never pruned mid-session; lost only on full page
+  // reload.
+  const [columnKindsCache, setColumnKindsCache] = useState<
+    Record<string, ColumnKind>
+  >({});
   const [layers, setLayers] = useState<Layer[]>(() => [initialLayer()]);
   const [labels, setLabels] = useState<LabelsLayer[]>(() => [initialLabels(1)]);
   const [customLayers, setCustomLayers] = useState<CustomLayer[]>([]);
@@ -159,6 +168,9 @@ export default function App() {
         if (data.activeTable) pendingActiveTableRef.current = data.activeTable;
         restoredActivePanel = data.activePanel ?? undefined;
         restoredSecondaryPanel = data.secondaryPanel ?? undefined;
+        if (data.columnKindsCache) {
+          setColumnKindsCache(data.columnKindsCache);
+        }
       }
       // If the hash had a valid panel selection, restore it. Otherwise fall
       // back to the first-layer auto-open default (skipped during tutorial
@@ -196,6 +208,10 @@ export default function App() {
         activeTable,
         activePanel,
         secondaryPanel,
+        columnKindsCache:
+          Object.keys(columnKindsCache).length > 0
+            ? columnKindsCache
+            : undefined,
       });
       if (cancelled) return;
       const next = "#" + payload;
@@ -216,6 +232,7 @@ export default function App() {
     activeTable,
     activePanel,
     secondaryPanel,
+    columnKindsCache,
   ]);
 
   useEffect(() => {
@@ -269,7 +286,15 @@ export default function App() {
     }
     if (!ready) return; // wait for wasm before introspecting
     try {
-      setColumns(ggsql.describeColumns(activeTable));
+      const next = ggsql.describeColumns(activeTable);
+      setColumns(next);
+      // Seed the additive kind cache so the no-data card can still render
+      // type badges if the user later resets the file.
+      setColumnKindsCache((prev) => {
+        const out = { ...prev };
+        for (const col of next) out[col.name] = col.kind;
+        return out;
+      });
       setErrors((prev) => prev.filter((m) => !m.startsWith("Failed to inspect")));
     } catch (e) {
       setErrors((prev) => [`Failed to inspect "${activeTable}": ${e}`, ...prev]);
@@ -837,7 +862,32 @@ export default function App() {
       UNIVERSAL_AESTHETICS.some((a) => l.mappings[a]),
     ) ||
     customLayers.some((c) => !c.disabled && c.ggsql.trim().length > 0);
-  const isEmpty = !activeTable || !hasMappings;
+  // Cold-start (neither a CSV nor a chart configured) keeps the right pane
+  // hidden so the tutorial overlay can call the user's attention to the data
+  // panel. Once they've built up a chart, the pane stays visible even after a
+  // file reset — the no-data card below explains what's missing.
+  const isEmpty = !activeTable && !hasMappings;
+  const noData = !activeTable && hasMappings;
+  const noDataVariables = useMemo(() => {
+    if (!noData) return [];
+    const allAes: Aes[] = [...AESTHETICS, ...FACETS];
+    const names = new Set<string>();
+    for (const aes of allAes) {
+      const v = sharedMappings[aes];
+      if (v) names.add(v);
+    }
+    for (const l of layers) {
+      if (l.disabled) continue;
+      for (const aes of allAes) {
+        const v = l.mappings[aes];
+        if (v) names.add(v);
+      }
+    }
+    return [...names].map((name) => ({
+      name,
+      kind: columnKindsCache[name] ?? null,
+    }));
+  }, [noData, sharedMappings, layers, columnKindsCache]);
   // The chart-error banner swaps "View" → "Reload page" whenever any
   // displayed error matches the unrecoverable-error list (currently the
   // "Chart error:" + "ggsql-wasm crashed" prefixes). Derived rather than a
@@ -863,7 +913,16 @@ export default function App() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-chrome">
       {tutorialStep !== null && <TutorialOverlay step={tutorialStep} />}
       <main className="relative flex min-h-0 flex-1">
-        <div className="flex min-h-0 flex-1 p-2">
+        <div
+          className={[
+            "flex min-h-0 p-2",
+            // When the chart is configured but no CSV is loaded, the build/
+            // chart side panels are hidden — collapse this column to fit the
+            // DataPanel only so the section to the right spans all remaining
+            // width and the no-data card centers across that whole strip.
+            noData ? "" : "flex-1",
+          ].join(" ")}
+        >
             <DataPanel
               ready={ready}
               activeTable={activeTable}
@@ -989,7 +1048,14 @@ export default function App() {
             )}
           </div>
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-app-chrome py-2 pr-2">
-          {isEmpty ? null : (
+          {isEmpty ? null : noData ? (
+            // `-mr-2` cancels the section's `pr-2` so the card centers between
+            // the left column's right edge and the actual window right edge,
+            // not between the column and the chrome-padded content area.
+            <div className="-mr-2 flex h-full w-full items-center justify-center p-6">
+              <NoDataCard variables={noDataVariables} />
+            </div>
+          ) : (
             <Group
               orientation="vertical"
               className="flex h-full w-full flex-col"
