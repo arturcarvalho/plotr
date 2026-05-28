@@ -9,6 +9,7 @@ import {
 } from "./buildQuery";
 import { AUTO } from "./autoChart";
 import type { ColumnInfo } from "./ggsql";
+import ggsqlPkg from "./ggsql-wasm/package.json";
 
 const COLS: ColumnInfo[] = [
   { name: "bill_len", kind: "numeric" },
@@ -42,14 +43,15 @@ describe("buildQuery without auto resolution (existing)", () => {
     expect(q).toContain("DRAW point MAPPING bill_len AS x, bill_dep AS y");
   });
 
-  it("FROM is always the first line", () => {
+  it("FROM is the second line (header occupies first)", () => {
     const q1 = buildQuery(
       "ggsql:penguins",
       [layer("point", { x: "bill_len", y: "bill_dep" })],
       [],
       COLS,
     );
-    expect(q1?.split("\n")[0]).toBe("FROM ggsql:penguins");
+    expect(q1?.split("\n")[0].startsWith("--")).toBe(true);
+    expect(q1?.split("\n")[1]).toBe("FROM ggsql:penguins");
 
     const q2 = buildQuery(
       "ggsql:penguins",
@@ -59,7 +61,21 @@ describe("buildQuery without auto resolution (existing)", () => {
       undefined,
       { x: "bill_len", y: "bill_dep" },
     );
-    expect(q2?.split("\n")[0]).toBe("FROM ggsql:penguins");
+    expect(q2?.split("\n")[0].startsWith("--")).toBe(true);
+    expect(q2?.split("\n")[1]).toBe("FROM ggsql:penguins");
+  });
+
+  it("prepends a versioned plotr header comment sourced from ggsql-wasm/package.json", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("point", { x: "bill_len", y: "bill_dep" })],
+      [],
+      COLS,
+    );
+    expect(q?.startsWith("-- Built on plotr.org with ggsql v")).toBe(true);
+    expect(q?.split("\n")[0]).toBe(
+      `-- Built on plotr.org with ggsql v${ggsqlPkg.version}`,
+    );
   });
   it("emits LABEL with single-quote escaping", () => {
     const q = buildQuery(

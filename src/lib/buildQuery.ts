@@ -1,5 +1,12 @@
 import type { ColumnInfo } from "./ggsql";
 import { resolveDraw } from "./autoChart";
+import ggsqlPkg from "./ggsql-wasm/package.json";
+
+// Branded as a SQL-style line comment so it travels alongside the query
+// through render + Copy + GGSQL tab without breaking ggsql parsing.
+// Sourced from the bundled wasm's package.json so bumps don't require a
+// separate constant update.
+const QUERY_HEADER = `-- Built on plotr.org with ggsql v${ggsqlPkg.version}`;
 
 // Aesthetics that apply to every chart type — used for render gating, shared
 // mapping detection, and shared mapping emission.
@@ -456,6 +463,7 @@ export function buildQuery(
   const labelLine = labelEntries.length ? `LABEL ${labelEntries.join(", ")}` : "";
 
   return [
+    QUERY_HEADER,
     `FROM ${table}`,
     visualiseLine,
     ...drawLines,
