@@ -112,7 +112,7 @@ function FilterField({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="mt-4 pr-3">
+    <div className="-ml-3 mt-8 border-t border-stone-200 pl-3 pr-3 pt-3">
       <label className="block">
         <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
           <span>Filter</span>

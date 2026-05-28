@@ -57,14 +57,6 @@ export function LabelsPanel({ labels, onChange }: Props) {
             value={labels.y ?? ""}
             onChange={(v) => onChange({ y: v || undefined })}
           />
-          <div>
-            <span className="mb-1 block font-mono text-xs font-semibold text-stone-700">
-              Caption
-            </span>
-            <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 font-mono text-xs text-amber-800">
-              Caption not available yet
-            </p>
-          </div>
         </div>
       </div>
     </aside>

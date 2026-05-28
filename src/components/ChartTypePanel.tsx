@@ -23,7 +23,6 @@ import {
   type LayerSettings,
   type Orientation,
   type Position,
-  type ProjectSettings,
   type SmoothMethod,
   type ViolinSide,
   type Vjust,
@@ -35,11 +34,8 @@ interface Props {
   resolvedDraw: string | null;
   compatibleDraws: string[];
   settings: LayerSettings;
-  project: ProjectSettings;
   onChangeDraw: (draw: string) => void;
   onChangeSettings: (next: LayerSettings) => void;
-  onChangeProject: (next: ProjectSettings) => void;
-  onRemove?: () => void;
   onClose: () => void;
 }
 
@@ -238,11 +234,8 @@ export function ChartTypePanel({
   resolvedDraw,
   compatibleDraws,
   settings,
-  project,
   onChangeDraw,
   onChangeSettings,
-  onChangeProject,
-  onRemove,
   onClose,
 }: Props) {
   const compatible = new Set(compatibleDraws);
@@ -538,40 +531,7 @@ export function ChartTypePanel({
                 </div>
               </>
             )}
-            <div>
-              <span className="mb-1 block font-mono text-xs text-stone-700">
-                Aspect ratio
-              </span>
-              <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 font-mono text-xs text-amber-800">
-                Aspect ratio not available yet
-              </p>
-            </div>
-            <label className="flex items-center gap-2 font-mono text-xs text-stone-700">
-              <input
-                type="checkbox"
-                checked={project.clip ?? true}
-                onChange={(e) =>
-                  onChangeProject({
-                    ...project,
-                    clip: e.target.checked ? undefined : false,
-                  })
-                }
-              />
-              Clip data outside axes
-            </label>
           </section>
-
-          {onRemove && (
-            <section className="border-t border-stone-200 pt-3">
-              <button
-                type="button"
-                onClick={onRemove}
-                className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
-              >
-                Remove layer
-              </button>
-            </section>
-          )}
         </div>
       </div>
       {hover && <DrawTooltip draw={hover.draw} rect={hover.rect} />}

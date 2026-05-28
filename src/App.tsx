@@ -954,15 +954,8 @@ export default function App() {
                       compatibleDrawsByLayerId[panelLayer.id] ?? []
                     }
                     settings={panelLayer.settings ?? {}}
-                    project={project}
                     onChangeDraw={(d) => onChangeDraw(panelLayer.id, d)}
                     onChangeSettings={(s) => onChangeSettings(panelLayer.id, s)}
-                    onChangeProject={setProject}
-                    onRemove={
-                      layers.length > 1
-                        ? () => onRemoveLayer(panelLayer.id)
-                        : undefined
-                    }
                     onClose={closeSecondaryPanel}
                   />
                 ) : secondaryPanel?.kind === "mapping" && panelLayer ? (
