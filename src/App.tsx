@@ -93,7 +93,7 @@ export default function App() {
     isSeen() ? null : 1,
   );
   const [secondaryPanel, setSecondaryPanel] = useState<SecondaryPanel>(null);
-  const [bottomTab, setBottomTab] = useState<BottomTab>("problems");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("ggsql");
   // Latest Vega-Lite spec ggsql produced for the bottom-pane `vega-lite` tab.
   // Set on each successful render; cleared whenever the render path bails or
   // throws so the tab shows its placeholder rather than a stale spec.
@@ -119,6 +119,18 @@ export default function App() {
   // memory in-place, so true recovery requires a page reload. We try
   // reinitialize() once as a best effort; on second crash we tell the user.
   const wasmRecoveryAttemptedRef = useRef(false);
+
+  // Auto-switch the bottom pane to Problems whenever the errors list grows.
+  // Warnings don't trigger the switch — they're surfaced via the amber badge
+  // on the tab and are usually not actionable. Tracks the previous length so
+  // it only fires on a new error, not on unrelated re-renders or on clears.
+  const prevErrorCountRef = useRef(errors.length);
+  useEffect(() => {
+    if (errors.length > prevErrorCountRef.current) {
+      setBottomTab("problems");
+    }
+    prevErrorCountRef.current = errors.length;
+  }, [errors.length]);
 
   // Hydrate from URL hash on mount, then auto-open the first layer's panel.
   useEffect(() => {

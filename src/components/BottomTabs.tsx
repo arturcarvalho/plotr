@@ -37,6 +37,9 @@ export function BottomTabs({
   return (
     <div className="flex h-full flex-col bg-app-chrome">
       <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 px-1">
+        <TabButton active={tab === "ggsql"} onClick={() => onTabChange("ggsql")}>
+          GGSQL
+        </TabButton>
         <TabButton
           active={tab === "problems"}
           onClick={() => onTabChange("problems")}
@@ -59,9 +62,6 @@ export function BottomTabs({
               {warningCount}
             </span>
           )}
-        </TabButton>
-        <TabButton active={tab === "ggsql"} onClick={() => onTabChange("ggsql")}>
-          GGSQL
         </TabButton>
         <TabButton
           active={tab === "vega-lite"}
