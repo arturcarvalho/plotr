@@ -23,7 +23,7 @@ export function LabelsCard({
         className={[
           "flex h-10 w-10 items-center justify-center rounded font-mono text-base font-bold transition-colors",
           open
-            ? "bg-stone-100 text-stone-800 hover:bg-stone-200"
+            ? "bg-stone-300 text-stone-900 hover:bg-stone-400"
             : "border border-stone-200 bg-white text-stone-700 hover:bg-stone-100",
           disabled ? "opacity-50 grayscale" : "",
         ].join(" ")}

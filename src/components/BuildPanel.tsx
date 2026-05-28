@@ -109,7 +109,7 @@ export function BuildPanel({
             className={[
               "flex h-9 w-9 items-center justify-center rounded transition-colors",
               sharedOpen
-                ? "bg-stone-100 text-stone-800 hover:bg-stone-200"
+                ? "bg-stone-300 text-stone-900 hover:bg-stone-400"
                 : "text-stone-500 hover:bg-stone-100 hover:text-stone-700",
             ].join(" ")}
           >
