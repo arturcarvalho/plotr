@@ -194,34 +194,65 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirror persistable state into the URL hash whenever it changes.
+  // Mirror persistable state into the URL hash. The work is split across two
+  // effects with different write strategies:
+  //   - Chart-state changes (mappings, settings, dataset, …) push history
+  //     entries — with a 600 ms debounce so a burst of keystrokes coalesces
+  //     into one step — so the browser Back button steps through previous
+  //     chart configurations.
+  //   - Panel-selection changes (which side panel is open) just replaceState,
+  //     so opening/closing panels doesn't pollute the back-button history.
+  // Both close over the full state and serialise the same complete payload,
+  // so the URL is always a single source of truth.
+  const buildPersistPayload = () =>
+    serialize({
+      layers,
+      labels,
+      customLayers: customLayers.length > 0 ? customLayers : undefined,
+      project,
+      sharedMappings,
+      activeTable,
+      activePanel,
+      secondaryPanel,
+      columnKindsCache:
+        Object.keys(columnKindsCache).length > 0
+          ? columnKindsCache
+          : undefined,
+    });
+
+  const lastChartPushTsRef = useRef(0);
+  const CHART_HISTORY_DEBOUNCE_MS = 600;
+
+  // Chart-state effect: push to history, debounced.
   useEffect(() => {
     if (!hydrated) return;
+    // Skip while `activeTable` is still being hydrated by the [ready] effect.
+    // Persisting now would write a URL with `activeTable: null`, then re-write
+    // it once the deferred table resolves — polluting browser history (and
+    // making Back land on a spurious "no data" entry right after a reload).
+    if (pendingActiveTableRef.current !== null) return;
     let cancelled = false;
     (async () => {
-      const payload = await serialize({
-        layers,
-        labels,
-        customLayers: customLayers.length > 0 ? customLayers : undefined,
-        project,
-        sharedMappings,
-        activeTable,
-        activePanel,
-        secondaryPanel,
-        columnKindsCache:
-          Object.keys(columnKindsCache).length > 0
-            ? columnKindsCache
-            : undefined,
-      });
+      const payload = await buildPersistPayload();
       if (cancelled) return;
       const next = "#" + payload;
-      if (window.location.hash !== next) {
+      if (window.location.hash === next) return;
+      const now = Date.now();
+      const inDebounceWindow =
+        now - lastChartPushTsRef.current < CHART_HISTORY_DEBOUNCE_MS;
+      if (inDebounceWindow) {
         window.history.replaceState(null, "", next);
+      } else {
+        window.history.pushState(null, "", next);
       }
+      lastChartPushTsRef.current = now;
     })();
     return () => {
       cancelled = true;
     };
+    // `buildPersistPayload` is recreated every render but only reads from
+    // state captured at call time, so omitting it from deps is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     hydrated,
     layers,
@@ -230,10 +261,56 @@ export default function App() {
     project,
     sharedMappings,
     activeTable,
-    activePanel,
-    secondaryPanel,
     columnKindsCache,
   ]);
+
+  // Panel-state effect: silent URL update, never adds a history entry.
+  useEffect(() => {
+    if (!hydrated) return;
+    // Same defer guard as the chart-state effect — `activePanel` and
+    // `secondaryPanel` are set synchronously during hydration, so this effect
+    // can fire while `activeTable` is still pending. Skip until it lands.
+    if (pendingActiveTableRef.current !== null) return;
+    let cancelled = false;
+    (async () => {
+      const payload = await buildPersistPayload();
+      if (cancelled) return;
+      const next = "#" + payload;
+      if (window.location.hash === next) return;
+      window.history.replaceState(null, "", next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, activePanel, secondaryPanel]);
+
+  // Browser Back / Forward — re-deserialise the URL into state. Both persist
+  // effects above re-run after the setStates flush; their hash-already-matches
+  // guards short-circuit so the popstate itself never pushes a new entry.
+  const popGenRef = useRef(0);
+  useEffect(() => {
+    if (!hydrated) return;
+    const onPop = async () => {
+      const gen = ++popGenRef.current;
+      const data = await deserialize(window.location.hash);
+      if (gen !== popGenRef.current) return; // a newer popstate already landed
+      if (!data) return;
+      setLayers(data.layers.length > 0 ? data.layers : [initialLayer()]);
+      setLabels(data.labels.length > 0 ? data.labels : [initialLabels(1)]);
+      setCustomLayers(data.customLayers ?? []);
+      setProject(data.project);
+      setSharedMappings(data.sharedMappings);
+      // ggsql is ready by now (we're well past mount) so set the table name
+      // directly instead of routing through `pendingActiveTableRef`.
+      setActiveTable(data.activeTable);
+      setActivePanel(data.activePanel ?? null);
+      setSecondaryPanel(data.secondaryPanel ?? null);
+      setColumnKindsCache(data.columnKindsCache ?? {});
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [hydrated]);
 
   useEffect(() => {
     ggsql
