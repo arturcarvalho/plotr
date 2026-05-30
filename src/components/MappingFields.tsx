@@ -135,11 +135,11 @@ export function MappingFields({
         labeledField("label", "Label", "Text content")}
       <Field label="Panels">
         <div className="space-y-1">
-          {facetRow("facet_row", "rows")}
+          {facetRow("facet_row")}
           <div className="text-center font-mono text-[10px] text-stone-400">
             by
           </div>
-          {facetRow("facet_col", "columns")}
+          {facetRow("facet_col")}
         </div>
       </Field>
     </div>
