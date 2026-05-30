@@ -15,6 +15,7 @@ import Select, {
   type StylesConfig,
 } from "react-select";
 import type { Aes, LayerSettings, ScaleSettings } from "../lib/buildQuery";
+import { useDebouncedInput } from "../lib/useDebouncedInput";
 import {
   CONTINUOUS_PALETTES,
   DEFAULT_CONTINUOUS,
@@ -865,19 +866,22 @@ function AxisBreaksField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const input = useDebouncedInput(value, onChange);
   return (
     <div>
       <label className="block">
         <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
           <span>Breaks ({aes})</span>
           <span className="text-[10px] text-stone-500">
-            {value.trim() ? "set" : "off"}
+            {input.value.trim() ? "set" : "off"}
           </span>
         </span>
         <input
           type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={input.value}
+          onChange={input.onChange}
+          onBlur={input.onBlur}
+          onKeyDown={input.onKeyDown}
           placeholder="2000, 2010"
           spellCheck={false}
           className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
@@ -906,19 +910,22 @@ function AxisFormatField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const input = useDebouncedInput(value, onChange);
   return (
     <div>
       <label className="block">
         <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
           <span>Format ({aes})</span>
           <span className="text-[10px] text-stone-500">
-            {value.trim() ? "set" : "off"}
+            {input.value.trim() ? "set" : "off"}
           </span>
         </span>
         <input
           type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={input.value}
+          onChange={input.onChange}
+          onBlur={input.onBlur}
+          onKeyDown={input.onKeyDown}
           placeholder="{:num %.2f}"
           spellCheck={false}
           className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"

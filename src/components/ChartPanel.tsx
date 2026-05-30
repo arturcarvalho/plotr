@@ -7,6 +7,7 @@ import {
   type LayerSettings,
 } from "../lib/buildQuery";
 import { crossesBoundary, useDragging } from "../lib/dragHelpers";
+import { useDebouncedInput } from "../lib/useDebouncedInput";
 import { DeleteBanner } from "./DeleteBanner";
 import { MappingFields } from "./MappingFields";
 
@@ -119,19 +120,22 @@ function FilterField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const input = useDebouncedInput(value, onChange);
   return (
     <div className="-ml-3 mt-8 border-t border-stone-200 pl-3 pr-3 pt-3">
       <label className="block">
         <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
           <span>Filter</span>
           <span className="text-[10px] text-stone-500">
-            {value.trim() ? "set" : "off"}
+            {input.value.trim() ? "set" : "off"}
           </span>
         </span>
         <input
           type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={input.value}
+          onChange={input.onChange}
+          onBlur={input.onBlur}
+          onKeyDown={input.onKeyDown}
           placeholder="species = 'Adelie'"
           spellCheck={false}
           className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
