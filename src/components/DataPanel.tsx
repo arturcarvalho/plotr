@@ -1,15 +1,17 @@
 import { useRef, useState } from "react";
 import type { ColumnInfo, ColumnKind } from "../lib/ggsql";
 import { ColumnKindBadge } from "./ColumnKindBadge";
-import { Tooltip } from "./Tooltip";
+import { HeaderMenu } from "./HeaderMenu";
 
 interface Props {
   ready: boolean;
   activeTable: string | null;
   columns: ColumnInfo[];
+  variableCount: number;
   onLoadCsv: (name: string, bytes: Uint8Array) => void;
   onLoadPenguins: () => void;
   onResetFile: () => void;
+  onClearChart: () => void;
 }
 
 const TYPE_LABEL: Record<ColumnKind, string> = {
@@ -30,9 +32,11 @@ export function DataPanel({
   ready,
   activeTable,
   columns,
+  variableCount,
   onLoadCsv,
   onLoadPenguins,
   onResetFile,
+  onClearChart,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -54,7 +58,12 @@ export function DataPanel({
     return (
       <aside className="flex h-full w-[252px] shrink-0 flex-col bg-app-chrome">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-lg border border-stone-300 bg-white">
-            <BrandStrip />
+            <BrandStrip
+              activeTable={activeTable}
+              variableCount={variableCount}
+              onReplaceData={onResetFile}
+              onClearChart={onClearChart}
+            />
             <div className="flex h-[52px] items-center gap-2 border-b border-stone-200 px-3">
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-[10px] uppercase tracking-wide text-stone-500">
@@ -67,29 +76,6 @@ export function DataPanel({
                   {activeTable}
                 </div>
               </div>
-              <Tooltip text="Reset file — removes the loaded CSV and clears it from browser storage. Keeps your chart config.">
-                <button
-                  type="button"
-                  onClick={onResetFile}
-                  aria-label="Reset file"
-                  className="shrink-0 rounded p-3 text-stone-500 hover:bg-stone-200 hover:text-stone-800"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <polyline points="23 4 23 10 17 10" />
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                  </svg>
-                </button>
-              </Tooltip>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto py-2">
@@ -104,7 +90,12 @@ export function DataPanel({
   return (
     <aside className="flex h-full w-[252px] shrink-0 flex-col overflow-y-auto bg-app-chrome">
       <div className="flex flex-1 flex-col rounded-l-lg border border-stone-300 bg-white">
-        <BrandStrip />
+        <BrandStrip
+          activeTable={activeTable}
+          variableCount={variableCount}
+          onReplaceData={onResetFile}
+          onClearChart={onClearChart}
+        />
         <div className="flex flex-1 flex-col p-3">
           <h2 className="mb-2 font-mono text-[10px] uppercase tracking-wide text-stone-500">
             Choose data
@@ -180,38 +171,31 @@ export function DataPanel({
   );
 }
 
-function BrandStrip() {
+function BrandStrip({
+  activeTable,
+  variableCount,
+  onReplaceData,
+  onClearChart,
+}: {
+  activeTable: string | null;
+  variableCount: number;
+  onReplaceData: () => void;
+  onClearChart: () => void;
+}) {
   return (
-    <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-stone-200 px-3 font-mono">
-      <div className="flex flex-col leading-tight">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-stone-800">plotr.org</span>
-          <span className="rounded border border-amber-300 bg-amber-100 px-1 py-px text-[8px] font-bold uppercase tracking-wide text-amber-800">
-            Alpha
-          </span>
-        </div>
+    <div className="flex h-[52px] shrink-0 items-stretch justify-between border-b border-stone-200 font-mono">
+      <div className="flex flex-col justify-center leading-tight pl-3">
+        <span className="text-sm font-semibold text-stone-800">plotr.org</span>
         <span className="text-xs tracking-wide text-stone-400">
           A ggsql chart builder
         </span>
       </div>
-      <a
-        href="https://github.com/arturcarvalho/plotr"
-        target="_blank"
-        rel="noreferrer noopener"
-        title="View source on GitHub"
-        aria-label="View source on GitHub"
-        className="shrink-0 rounded p-2 text-stone-600 hover:bg-stone-200 hover:text-stone-800"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="currentColor"
-          aria-hidden
-        >
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-        </svg>
-      </a>
+      <HeaderMenu
+        activeTable={activeTable}
+        variableCount={variableCount}
+        onReplaceData={onReplaceData}
+        onClearChart={onClearChart}
+      />
     </div>
   );
 }

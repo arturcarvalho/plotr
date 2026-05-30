@@ -30,6 +30,7 @@ import {
 } from "./lib/persist";
 import { clearLastCsv, loadLastCsv, saveLastCsv } from "./lib/csvStore";
 import { normalizeCsvHeader } from "./lib/csvNormalize";
+import { countConfiguredVariables } from "./lib/configSummary";
 import { isChartError, isUnrecoverableError } from "./lib/errorClass";
 import { BuildPanel } from "./components/BuildPanel";
 import { ChartPanel } from "./components/ChartPanel";
@@ -995,12 +996,6 @@ export default function App() {
     });
   };
 
-  // Chart-only reset: clears layers / labels / custom / shared / project.
-  // The loaded CSV stays — wired to a new button at the bottom of the rail.
-  const onResetChart = () => {
-    onResetConfig();
-  };
-
   // Panel toggles ---------------------------------------------------------
   const toggleLabelsPanel = (labelsId: string) => {
     setActivePanel((p) =>
@@ -1114,9 +1109,11 @@ export default function App() {
               ready={ready}
               activeTable={activeTable}
               columns={columns}
+              variableCount={countConfiguredVariables(layers, sharedMappings)}
               onLoadCsv={onLoadCsv}
               onLoadPenguins={onLoadPenguins}
               onResetFile={onResetFile}
+              onClearChart={onResetConfig}
             />
             {activeTable && (
               <div
@@ -1154,7 +1151,6 @@ export default function App() {
                   onToggleLayerDisabled={onToggleLayerDisabled}
                   onToggleLabelsDisabled={onToggleLabelsDisabled}
                   onToggleCustomDisabled={onToggleCustomDisabled}
-                  onResetChart={onResetChart}
                 />
                 {activeLabels && activePanel?.kind === "labels" ? (
                   <LabelsPanel
