@@ -61,11 +61,6 @@ export interface Persisted {
    *  whose CSV isn't in the recipient's IndexedDB. Additive in-session;
    *  serialised here so the type info travels with the chart. */
   columnKindsCache?: Record<string, ColumnKind>;
-  /** UI flag for the shared mappings panel's Color row layout. `true` →
-   *  split into Fill / Line color rows; `undefined`/`false` → joined "Color"
-   *  row with a Split button. Sits at the top level because `sharedMappings`
-   *  is a flat aesthetic→column map with no per-aesthetic settings of its own. */
-  sharedColorSplit?: boolean;
 }
 
 const VERSION = 2;
@@ -138,15 +133,6 @@ interface ShortLayerSettings {
   fpc?: string;
   kpd?: string;
   kpc?: string;
-  /** Joined-Color meta-aesthetic: fixed colour + palette pair + skip flag. */
-  clr?: string;
-  nc?: true;
-  cpd?: string;
-  cpc?: string;
-  /** Joined/split layout flag for the Color row. `true` → split into Fill /
-   *  Line; absent / false → joined. Stored only when explicitly split so the
-   *  default (joined) doesn't bloat the URL. */
-  cps?: true;
 }
 interface ShortLabels {
   i: string;
@@ -189,9 +175,6 @@ interface Payload {
   D?: ShortSecondaryPanel;
   /** columnKindsCache — column name → ggsql ColumnKind string. */
   K?: Record<string, string>;
-  /** sharedColorSplit — present only when explicitly true; omitted when the
-   *  shared panel is in the default joined Color view. */
-  scs?: true;
 }
 
 function encodeMappings(
@@ -265,13 +248,6 @@ function encodeLayerSettings(
     out.kpd = s.strokePaletteDiscrete;
   if (isNonEmptyString(s.strokePaletteContinuous))
     out.kpc = s.strokePaletteContinuous;
-  if (isNonEmptyString(s.color)) out.clr = s.color;
-  if (s.noColor === true) out.nc = true;
-  if (isNonEmptyString(s.colorPaletteDiscrete))
-    out.cpd = s.colorPaletteDiscrete;
-  if (isNonEmptyString(s.colorPaletteContinuous))
-    out.cpc = s.colorPaletteContinuous;
-  if (s.colorSplit === true) out.cps = true;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -413,11 +389,6 @@ function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
   if (typeof r.fpc === "string") out.fillPaletteContinuous = r.fpc;
   if (typeof r.kpd === "string") out.strokePaletteDiscrete = r.kpd;
   if (typeof r.kpc === "string") out.strokePaletteContinuous = r.kpc;
-  if (typeof r.clr === "string") out.color = r.clr;
-  if (r.nc === true) out.noColor = true;
-  if (typeof r.cpd === "string") out.colorPaletteDiscrete = r.cpd;
-  if (typeof r.cpc === "string") out.colorPaletteContinuous = r.cpc;
-  if (r.cps === true) out.colorSplit = true;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -622,7 +593,6 @@ export async function serialize(p: Persisted): Promise<string> {
     }
     if (Object.keys(out).length > 0) payload.K = out;
   }
-  if (p.sharedColorSplit === true) payload.scs = true;
   const json = JSON.stringify(payload);
   const gz = await gzipString(json);
   return `s=${base64UrlEncode(gz)}`;
@@ -709,6 +679,5 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
     }
     if (Object.keys(cache).length > 0) out.columnKindsCache = cache;
   }
-  if ((obj as { scs?: unknown }).scs === true) out.sharedColorSplit = true;
   return out;
 }

@@ -132,61 +132,6 @@ describe("serialize / deserialize round-trip", () => {
     });
   });
 
-  it("color mapping + colorSplit + color settings round-trip", async () => {
-    const s = await serialize({
-      layers: [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "a", y: "b", color: "c" },
-          settings: {
-            color: "red",
-            colorPaletteDiscrete: "set1",
-            colorPaletteContinuous: "viridis",
-            noColor: true,
-            colorSplit: true,
-          },
-        },
-      ],
-      labels: [],
-      project: {},
-      sharedMappings: {},
-      activeTable: null,
-    });
-    const got = await deserialize(s);
-    expect(got?.layers[0].mappings.color).toBe("c");
-    expect(got?.layers[0].settings).toEqual({
-      color: "red",
-      colorPaletteDiscrete: "set1",
-      colorPaletteContinuous: "viridis",
-      noColor: true,
-      colorSplit: true,
-    });
-  });
-
-  it("sharedColorSplit round-trips", async () => {
-    const s = await serialize({
-      layers: [],
-      labels: [],
-      project: {},
-      sharedMappings: {},
-      activeTable: null,
-      sharedColorSplit: true,
-    });
-    expect((await deserialize(s))?.sharedColorSplit).toBe(true);
-  });
-
-  it("sharedColorSplit is omitted when false / undefined", async () => {
-    const s = await serialize({
-      layers: [],
-      labels: [],
-      project: {},
-      sharedMappings: {},
-      activeTable: null,
-    });
-    expect((await deserialize(s))?.sharedColorSplit).toBeUndefined();
-  });
-
   it("palette settings round-trip", async () => {
     const s = await serialize({
       layers: [

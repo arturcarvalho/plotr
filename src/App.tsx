@@ -93,9 +93,6 @@ export default function App() {
   const [sharedMappings, setSharedMappings] = useState<
     Partial<Record<Aes, string>>
   >({});
-  // Shared-panel UI flag for the Color row. `true` → split into Fill + Line;
-  // undefined / false → joined Color row (default).
-  const [sharedColorSplit, setSharedColorSplit] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(() =>
     isSeen() ? null : 1,
@@ -170,9 +167,6 @@ export default function App() {
         if (data.columnKindsCache) {
           setColumnKindsCache(data.columnKindsCache);
         }
-        if (data.sharedColorSplit === true) {
-          setSharedColorSplit(true);
-        }
       }
       // If the hash had a valid panel selection, restore it. Otherwise fall
       // back to the first-layer auto-open default (skipped during tutorial
@@ -220,7 +214,6 @@ export default function App() {
         Object.keys(columnKindsCache).length > 0
           ? columnKindsCache
           : undefined,
-      sharedColorSplit: sharedColorSplit ? true : undefined,
     });
 
   const lastChartPushTsRef = useRef(0);
@@ -265,7 +258,6 @@ export default function App() {
     sharedMappings,
     activeTable,
     columnKindsCache,
-    sharedColorSplit,
   ]);
 
   // Panel-state effect: silent URL update, never adds a history entry.
@@ -311,7 +303,6 @@ export default function App() {
       setActivePanel(data.activePanel ?? null);
       setSecondaryPanel(data.secondaryPanel ?? null);
       setColumnKindsCache(data.columnKindsCache ?? {});
-      setSharedColorSplit(data.sharedColorSplit === true);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -407,10 +398,7 @@ export default function App() {
       const yK = columnAxisKind(columns, l.mappings.y ?? sharedMappings.y);
       const fillK = columnAxisKind(
         columns,
-        l.mappings.fill ??
-          l.mappings.color ??
-          sharedMappings.fill ??
-          sharedMappings.color,
+        l.mappings.fill ?? sharedMappings.fill,
       );
       map[l.id] = compatibleDraws(xK, yK, fillK);
     }
@@ -707,109 +695,6 @@ export default function App() {
 
   const onChangeSettings = (id: string, settings: LayerSettings) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, settings } : l)));
-
-  // ── Color join / split transitions ────────────────────────────────────
-  //
-  // Joined view stores everything under the `color` aesthetic + the matching
-  // `color*` / `noColor` LayerSettings keys. Split view uses `fill` + `stroke`
-  // independently. The buttons inside the dropzone-row toggle these atomically.
-
-  const onSplitColorLayer = (id: string) =>
-    setLayers((ls) =>
-      ls.map((l) => {
-        if (l.id !== id) return l;
-        const colorVal = l.mappings.color;
-        // Strip color mapping, mirror to fill + stroke (split semantics).
-        const nextMappings: typeof l.mappings = { ...l.mappings };
-        delete nextMappings.color;
-        if (colorVal !== undefined) {
-          nextMappings.fill = colorVal;
-          nextMappings.stroke = colorVal;
-        }
-        const s = l.settings ?? {};
-        const next: LayerSettings = {
-          ...s,
-          // Mirror color* → fill* + stroke*, then drop the color* keys.
-          fill: s.color ?? s.fill,
-          stroke: s.color ?? s.stroke,
-          fillPaletteDiscrete:
-            s.colorPaletteDiscrete ?? s.fillPaletteDiscrete,
-          fillPaletteContinuous:
-            s.colorPaletteContinuous ?? s.fillPaletteContinuous,
-          strokePaletteDiscrete:
-            s.colorPaletteDiscrete ?? s.strokePaletteDiscrete,
-          strokePaletteContinuous:
-            s.colorPaletteContinuous ?? s.strokePaletteContinuous,
-          noFill: s.noColor ?? s.noFill,
-          noStroke: s.noColor ?? s.noStroke,
-          color: undefined,
-          colorPaletteDiscrete: undefined,
-          colorPaletteContinuous: undefined,
-          noColor: undefined,
-          colorSplit: true,
-        };
-        return { ...l, mappings: nextMappings, settings: next };
-      }),
-    );
-
-  const onJoinColorLayer = (id: string) =>
-    setLayers((ls) =>
-      ls.map((l) => {
-        if (l.id !== id) return l;
-        // Per the join rule, fill wins; stroke is discarded.
-        const fillVal = l.mappings.fill;
-        const nextMappings: typeof l.mappings = { ...l.mappings };
-        delete nextMappings.fill;
-        delete nextMappings.stroke;
-        if (fillVal !== undefined) nextMappings.color = fillVal;
-        const s = l.settings ?? {};
-        const next: LayerSettings = {
-          ...s,
-          color: s.fill ?? s.color,
-          colorPaletteDiscrete:
-            s.fillPaletteDiscrete ?? s.colorPaletteDiscrete,
-          colorPaletteContinuous:
-            s.fillPaletteContinuous ?? s.colorPaletteContinuous,
-          noColor: s.noFill ?? s.noColor,
-          fill: undefined,
-          stroke: undefined,
-          fillPaletteDiscrete: undefined,
-          fillPaletteContinuous: undefined,
-          strokePaletteDiscrete: undefined,
-          strokePaletteContinuous: undefined,
-          noFill: undefined,
-          noStroke: undefined,
-          colorSplit: false,
-        };
-        return { ...l, mappings: nextMappings, settings: next };
-      }),
-    );
-
-  const onSplitColorShared = () => {
-    setSharedMappings((cur) => {
-      const colorVal = cur.color;
-      const next: typeof cur = { ...cur };
-      delete next.color;
-      if (colorVal !== undefined) {
-        next.fill = colorVal;
-        next.stroke = colorVal;
-      }
-      return next;
-    });
-    setSharedColorSplit(true);
-  };
-
-  const onJoinColorShared = () => {
-    setSharedMappings((cur) => {
-      const fillVal = cur.fill;
-      const next: typeof cur = { ...cur };
-      delete next.fill;
-      delete next.stroke;
-      if (fillVal !== undefined) next.color = fillVal;
-      return next;
-    });
-    setSharedColorSplit(false);
-  };
 
   const onMap = (id: string, aes: Aes, col: string | undefined) => {
     if (id === SHARED_MAPPINGS_KEY) {
@@ -1194,9 +1079,6 @@ export default function App() {
                     onDrop={(aes, col, src) =>
                       onDrop(SHARED_MAPPINGS_KEY, aes, col, src)
                     }
-                    colorSplit={sharedColorSplit}
-                    onSplitColor={onSplitColorShared}
-                    onJoinColor={onJoinColorShared}
                   />
                 ) : activePanel?.kind === "layer" && panelLayer ? (
                   <ChartPanel
@@ -1224,8 +1106,6 @@ export default function App() {
                     onRemovePartition={(col) =>
                       onRemovePartition(panelLayer.id, col)
                     }
-                    onSplitColor={() => onSplitColorLayer(panelLayer.id)}
-                    onJoinColor={() => onJoinColorLayer(panelLayer.id)}
                   />
                 ) : (
                   <div className="h-full w-[280px] shrink-0 bg-app-chrome" />

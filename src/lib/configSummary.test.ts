@@ -22,7 +22,7 @@ describe("countConfiguredVariables", () => {
   it("sums mappings across multiple layers", () => {
     expect(
       countConfiguredVariables(
-        [layer({ x: "a", y: "b" }), layer({ color: "c" })],
+        [layer({ x: "a", y: "b" }), layer({ fill: "c" })],
         {},
       ),
     ).toBe(3);
@@ -30,13 +30,13 @@ describe("countConfiguredVariables", () => {
 
   it("includes shared mappings in the count", () => {
     expect(
-      countConfiguredVariables([layer({ x: "a" })], { color: "c", size: "d" }),
+      countConfiguredVariables([layer({ x: "a" })], { fill: "c", size: "d" }),
     ).toBe(3);
   });
 
   it("skips empty-string values", () => {
     expect(
-      countConfiguredVariables([layer({ x: "a", y: "" })], { color: "" }),
+      countConfiguredVariables([layer({ x: "a", y: "" })], { fill: "" }),
     ).toBe(1);
   });
 

@@ -26,10 +26,6 @@ interface Props {
   /** Append / remove a PARTITION BY column for this layer. */
   onAddPartition: (col: string) => void;
   onRemovePartition: (col: string) => void;
-  /** Joined → split transition on the Color row. */
-  onSplitColor: () => void;
-  /** Split → joined transition (fill wins, stroke discarded). */
-  onJoinColor: () => void;
 }
 
 export function ChartPanel({
@@ -43,8 +39,6 @@ export function ChartPanel({
   onChangeSettings,
   onAddPartition,
   onRemovePartition,
-  onSplitColor,
-  onJoinColor,
 }: Props) {
   const title = resolvedDraw ? chartLabel(resolvedDraw) : "Chart";
   const asideRef = useRef<HTMLElement>(null);
@@ -98,9 +92,6 @@ export function ChartPanel({
             partition={layer.partition}
             onAddPartition={onAddPartition}
             onRemovePartition={onRemovePartition}
-            colorSplit={layer.settings?.colorSplit}
-            onSplitColor={onSplitColor}
-            onJoinColor={onJoinColor}
           />
           <FilterField
             value={layer.settings?.filter ?? ""}
