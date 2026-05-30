@@ -4,8 +4,10 @@ import {
   CHART_LABELS,
   computeMissingRequired,
   DRAW_TYPES,
+  type Aes,
   type CustomLayer,
   type Layer,
+  type ScaleSettings,
 } from "./buildQuery";
 import { AUTO } from "./autoChart";
 import type { ColumnInfo } from "./ggsql";
@@ -1210,204 +1212,133 @@ describe("shared mappings (VISUALISE level)", () => {
   });
 });
 
-describe("buildQuery emits SCALE for palettes", () => {
-  it("discrete fill mapping + fillPaletteDiscrete → SCALE fill TO <palette>", () => {
-    const q = buildQuery(
+describe("buildQuery emits SCALE for palettes (chart-level scales)", () => {
+  const q = (
+    layers: Layer[],
+    scales: ScaleSettings = {},
+    shared?: Partial<Record<Aes, string>>,
+  ) =>
+    buildQuery(
       "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
-          settings: { fillPaletteDiscrete: "set1" },
-        },
-      ],
+      layers,
       [],
       COLS,
+      undefined,
+      shared,
+      undefined,
+      scales,
     );
-    expect(q).toContain("species AS fill");
-    expect(q).toContain("SCALE fill TO set1");
+  const point = (
+    mappings: Layer["mappings"],
+    settings?: Layer["settings"],
+  ): Layer => ({ id: "L", draw: "point", mappings, settings });
+
+  it("discrete fill mapping + fillPaletteDiscrete → SCALE fill TO <palette>", () => {
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "species" })], {
+      fillPaletteDiscrete: "set1",
+    });
+    expect(out).toContain("species AS fill");
+    expect(out).toContain("SCALE fill TO set1");
   });
 
   it("continuous fill mapping + fillPaletteContinuous → SCALE fill TO <palette>", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "bill_dep" },
-          settings: { fillPaletteContinuous: "viridis" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("bill_dep AS fill");
-    expect(q).toContain("SCALE fill TO viridis");
-  });
-
-  it("date fill mapping uses fillPaletteContinuous", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "born_at" },
-          settings: { fillPaletteContinuous: "viridis" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("SCALE fill TO viridis");
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "bill_dep" })], {
+      fillPaletteContinuous: "viridis",
+    });
+    expect(out).toContain("bill_dep AS fill");
+    expect(out).toContain("SCALE fill TO viridis");
   });
 
   it("palette slot is emitted regardless of mapping (no mapping)", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { fillPaletteDiscrete: "set1" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("SCALE fill TO set1");
+    const out = q([point({ x: "bill_len", y: "bill_dep" })], {
+      fillPaletteDiscrete: "set1",
+    });
+    expect(out).toContain("SCALE fill TO set1");
   });
 
   it("empty palette slot → no SCALE clause (ggsql default applies)", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).not.toContain("SCALE");
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "species" })]);
+    expect(out).not.toContain("SCALE");
   });
 
-  it("stroke mapping + strokePaletteDiscrete emits SCALE stroke", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
+  it("stroke palette → SCALE stroke TO <palette>", () => {
+    const out = q(
       [
         {
           id: "L",
           draw: "line",
           mappings: { x: "bill_len", y: "bill_dep", stroke: "species" },
-          settings: { strokePaletteDiscrete: "tableau10" },
         },
       ],
-      [],
-      COLS,
+      { strokePaletteDiscrete: "tableau10" },
     );
-    expect(q).toContain("SCALE stroke TO tableau10");
+    expect(out).toContain("SCALE stroke TO tableau10");
   });
 
-  it("fixed fill setting and fill mapping both emit (mapping does not suppress SETTING)", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
-          settings: { fill: "blue" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("fill => 'blue'");
-    expect(q).toContain("species AS fill");
+  it("fixed fill setting (per-layer) and fill mapping both emit", () => {
+    const out = q([
+      point({ x: "bill_len", y: "bill_dep", fill: "species" }, { fill: "blue" }),
+    ]);
+    expect(out).toContain("fill => 'blue'");
+    expect(out).toContain("species AS fill");
   });
 
-  it("all three slots set → SETTING + both SCALE clauses emitted", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: {
-            fill: "blue",
-            fillPaletteDiscrete: "set1",
-            fillPaletteContinuous: "viridis",
-          },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("fill => 'blue'");
-    expect(q).toContain("SCALE fill TO set1");
-    expect(q).toContain("SCALE fill TO viridis");
+  it("per-layer fixed fill + chart-level palettes all emit", () => {
+    const out = q([point({ x: "bill_len", y: "bill_dep" }, { fill: "blue" })], {
+      fillPaletteDiscrete: "set1",
+      fillPaletteContinuous: "viridis",
+    });
+    expect(out).toContain("fill => 'blue'");
+    expect(out).toContain("SCALE fill TO set1");
+    expect(out).toContain("SCALE fill TO viridis");
   });
 
   it("explicit default palette name still emits SCALE clause", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
-          settings: { fillPaletteDiscrete: "ggsql10" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("SCALE fill TO ggsql10");
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "species" })], {
+      fillPaletteDiscrete: "ggsql10",
+    });
+    expect(out).toContain("SCALE fill TO ggsql10");
   });
 
-  it("noFill still wins over mapping (emits SETTING fill => null) and SCALE still emits", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
+  it("noFill (per-layer) wins over mapping; chart-level SCALE still emits", () => {
+    const out = q(
       [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
-          settings: { noFill: true, fillPaletteDiscrete: "set1" },
-        },
+        point(
+          { x: "bill_len", y: "bill_dep", fill: "species" },
+          { noFill: true },
+        ),
       ],
-      [],
-      COLS,
+      { fillPaletteDiscrete: "set1" },
     );
-    expect(q).toContain("fill => null");
-    expect(q).not.toContain("species AS fill");
-    expect(q).toContain("SCALE fill TO set1");
+    expect(out).toContain("fill => null");
+    expect(out).not.toContain("species AS fill");
+    expect(out).toContain("SCALE fill TO set1");
   });
 
-  it("shared fill mapping picks up first layer's palette", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
+  it("palette is chart-level: emitted with a shared fill mapping", () => {
+    const out = q([point({})], { fillPaletteDiscrete: "set2" }, {
+      x: "bill_len",
+      y: "bill_dep",
+      fill: "species",
+    });
+    expect(out).toContain("SCALE fill TO set2");
+  });
+
+  it("one SCALE fill regardless of layer count (chart-level, not per-layer)", () => {
+    const out = q(
       [
+        point({ x: "bill_len", y: "bill_dep", fill: "species" }),
         {
-          id: "L",
+          id: "L2",
           draw: "point",
-          mappings: {},
-          settings: { fillPaletteDiscrete: "set2" },
+          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
         },
       ],
-      [],
-      COLS,
-      undefined,
-      { x: "bill_len", y: "bill_dep", fill: "species" },
+      { fillPaletteDiscrete: "set1" },
     );
-    expect(q).toContain("SCALE fill TO set2");
+    expect(
+      out!.split("\n").filter((l) => l.startsWith("SCALE fill")),
+    ).toHaveLength(1);
   });
 });
 
@@ -1907,184 +1838,74 @@ describe("buildQuery emits per-layer FILTER", () => {
   });
 });
 
-describe("buildQuery emits SCALE … RENAMING for axis formatters", () => {
-  it("xFormat emits SCALE x RENAMING * => '<template>'", () => {
-    const q = buildQuery(
+describe("buildQuery emits SCALE … RENAMING for axis formatters (chart-level scales)", () => {
+  const q = (scales: ScaleSettings, layers?: Layer[]) =>
+    buildQuery(
       "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "{:num %.2f}" },
-        },
+      layers ?? [
+        { id: "L", draw: "point", mappings: { x: "bill_len", y: "bill_dep" } },
       ],
       [],
       COLS,
+      undefined,
+      undefined,
+      undefined,
+      scales,
     );
-    expect(q).toContain("SCALE x RENAMING * => '{:num %.2f}'");
+
+  it("xFormat emits SCALE x RENAMING * => '<template>'", () => {
+    expect(q({ xFormat: "{:num %.2f}" })).toContain(
+      "SCALE x RENAMING * => '{:num %.2f}'",
+    );
   });
 
   it("yFormat emits SCALE y RENAMING * => '<template>'", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { yFormat: "{:time %Y-%m}" },
-        },
-      ],
-      [],
-      COLS,
+    expect(q({ yFormat: "{:time %Y-%m}" })).toContain(
+      "SCALE y RENAMING * => '{:time %Y-%m}'",
     );
-    expect(q).toContain("SCALE y RENAMING * => '{:time %Y-%m}'");
   });
 
   it("both formatters appear in x-then-y order", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "{:num %.2f}", yFormat: "{:num %.1f}" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    const xIdx = q!.indexOf("SCALE x RENAMING");
-    const yIdx = q!.indexOf("SCALE y RENAMING");
+    const out = q({ xFormat: "{:num %.2f}", yFormat: "{:num %.1f}" });
+    const xIdx = out!.indexOf("SCALE x RENAMING");
+    const yIdx = out!.indexOf("SCALE y RENAMING");
     expect(xIdx).toBeGreaterThan(-1);
     expect(yIdx).toBeGreaterThan(-1);
     expect(xIdx).toBeLessThan(yIdx);
   });
 
-  it("first non-empty xFormat across layers wins", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L1",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-        },
-        {
-          id: "L2",
-          draw: "smooth",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "{:num %.2f}" },
-        },
-        {
-          id: "L3",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "{:num %.5f}" },
-        },
-      ],
-      [],
-      COLS,
+  it("chart-level: one SCALE x regardless of layer count", () => {
+    const out = q({ xFormat: "{:num %.2f}" }, [
+      { id: "L1", draw: "point", mappings: { x: "bill_len", y: "bill_dep" } },
+      { id: "L2", draw: "smooth", mappings: { x: "bill_len", y: "bill_dep" } },
+    ]);
+    expect(out!.split("\n").filter((l) => l.startsWith("SCALE x"))).toHaveLength(
+      1,
     );
-    expect(q).toContain("SCALE x RENAMING * => '{:num %.2f}'");
-    expect(q).not.toContain("{:num %.5f}");
-  });
-
-  it("disabled layer's xFormat is ignored", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L1",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "{:UPPER}" },
-          disabled: true,
-        },
-        {
-          id: "L2",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "{:Title}" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("SCALE x RENAMING * => '{:Title}'");
-    expect(q).not.toContain("{:UPPER}");
+    expect(out).toContain("SCALE x RENAMING * => '{:num %.2f}'");
   });
 
   it("empty / whitespace-only xFormat emits no SCALE x RENAMING clause", () => {
-    const empty = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "" },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(empty).not.toContain("RENAMING");
-
-    const ws = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "  \t  " },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(ws).not.toContain("RENAMING");
+    expect(q({ xFormat: "" })).not.toContain("RENAMING");
+    expect(q({ xFormat: "  \t  " })).not.toContain("RENAMING");
   });
 
   it("single-quote in the template is SQL-escaped (doubled)", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep" },
-          settings: { xFormat: "it's {}" },
-        },
-      ],
-      [],
-      COLS,
+    expect(q({ xFormat: "it's {}" })).toContain(
+      "SCALE x RENAMING * => 'it''s {}'",
     );
-    expect(q).toContain("SCALE x RENAMING * => 'it''s {}'");
   });
 
-  it("axis SCALE coexists with palette SCALE clauses (palettes still emit unchanged)", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
-          settings: {
-            xFormat: "{:num %.2f}",
-            fillPaletteDiscrete: "ggsql10",
-          },
-        },
-      ],
-      [],
-      COLS,
-    );
-    expect(q).toContain("SCALE fill TO ggsql10");
-    expect(q).toContain("SCALE x RENAMING * => '{:num %.2f}'");
+  it("axis SCALE coexists with palette SCALE clauses", () => {
+    const out = q({ xFormat: "{:num %.2f}", fillPaletteDiscrete: "ggsql10" }, [
+      {
+        id: "L",
+        draw: "point",
+        mappings: { x: "bill_len", y: "bill_dep", fill: "species" },
+      },
+    ]);
+    expect(out).toContain("SCALE fill TO ggsql10");
+    expect(out).toContain("SCALE x RENAMING * => '{:num %.2f}'");
   });
 });
 
@@ -2174,73 +1995,42 @@ describe("buildQuery emits per-layer PARTITION BY", () => {
   });
 });
 
-describe("buildQuery emits SCALE … SETTING breaks for axis breaks", () => {
-  const pointLayer = (settings: Layer["settings"]): Layer => ({
-    id: "L",
-    draw: "point",
-    mappings: { x: "bill_len", y: "bill_dep" },
-    settings,
-  });
-
-  it("xBreaks emits SCALE x SETTING breaks => (<values>)", () => {
-    const q = buildQuery(
+describe("buildQuery emits SCALE … SETTING breaks for axis breaks (chart-level scales)", () => {
+  const q = (scales: ScaleSettings) =>
+    buildQuery(
       "ggsql:penguins",
-      [pointLayer({ xBreaks: "2000, 2010" })],
+      [{ id: "L", draw: "point", mappings: { x: "bill_len", y: "bill_dep" } }],
       [],
       COLS,
+      undefined,
+      undefined,
+      undefined,
+      scales,
     );
-    expect(q).toContain("SCALE x SETTING breaks => (2000, 2010)");
+
+  it("xBreaks emits SCALE x SETTING breaks => (<values>)", () => {
+    expect(q({ xBreaks: "2000, 2010" })).toContain(
+      "SCALE x SETTING breaks => (2000, 2010)",
+    );
   });
 
   it("yBreaks emits SCALE y SETTING breaks => (<values>)", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [pointLayer({ yBreaks: "0, 50, 100" })],
-      [],
-      COLS,
+    expect(q({ yBreaks: "0, 50, 100" })).toContain(
+      "SCALE y SETTING breaks => (0, 50, 100)",
     );
-    expect(q).toContain("SCALE y SETTING breaks => (0, 50, 100)");
   });
 
   it("breaks + format fold into ONE SCALE clause, SETTING before RENAMING", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [pointLayer({ xBreaks: "2000, 2010", xFormat: "{:num %.0f}" })],
-      [],
-      COLS,
-    );
-    expect(q).toContain(
+    const out = q({ xBreaks: "2000, 2010", xFormat: "{:num %.0f}" });
+    expect(out).toContain(
       "SCALE x SETTING breaks => (2000, 2010) RENAMING * => '{:num %.0f}'",
     );
-    // exactly one SCALE x line
-    expect(q!.split("\n").filter((l) => l.startsWith("SCALE x"))).toHaveLength(
+    expect(out!.split("\n").filter((l) => l.startsWith("SCALE x"))).toHaveLength(
       1,
     );
   });
 
   it("empty / whitespace breaks emits no SETTING breaks", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [pointLayer({ xBreaks: "   " })],
-      [],
-      COLS,
-    );
-    expect(q).not.toContain("SETTING breaks");
-  });
-
-  it("first non-empty xBreaks across enabled layers wins", () => {
-    const q = buildQuery(
-      "ggsql:penguins",
-      [
-        { ...pointLayer({}), id: "L1" },
-        { ...pointLayer({ xBreaks: "1, 2" }), id: "L2" },
-      ],
-      [],
-      COLS,
-    );
-    expect(q!.split("\n").filter((l) => l.startsWith("SCALE x"))).toHaveLength(
-      1,
-    );
-    expect(q).toContain("SCALE x SETTING breaks => (1, 2)");
+    expect(q({ xBreaks: "   " })).not.toContain("SETTING breaks");
   });
 });

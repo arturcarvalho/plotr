@@ -114,26 +114,28 @@ export interface LayerSettings {
    *  tail of the DRAW clause. Free-form passthrough — ggsql parses + validates
    *  it. Empty / whitespace-only is dropped. */
   filter?: string;
-  /** Axis-tick break formatter for the X axis. Emitted as a standalone
-   *  `SCALE x RENAMING * => '<template>'` clause. Templates use the ggsql
-   *  break-format tokens — see
-   *  https://ggsql.org/syntax/clause/scale.html#break-formatting. One clause
-   *  per chart: first non-empty value across enabled layers wins. */
-  xFormat?: string;
-  /** Same as `xFormat`, for the Y axis. */
-  yFormat?: string;
-  /** Comma-separated break values for the X axis. Emitted inside the same
-   *  `SCALE x` clause as `xFormat` — `SCALE x SETTING breaks => (<values>)` —
-   *  to limit the visible axis ticks. Raw passthrough (ggsql validates); one
-   *  per chart, first non-empty across enabled layers wins. */
-  xBreaks?: string;
-  /** Same as `xBreaks`, for the Y axis. */
-  yBreaks?: string;
   slope?: number;
   opacity?: number;
   size?: number;
   noFill?: boolean;
   noStroke?: boolean;
+}
+
+/** Chart-level scale settings — properties of the shared X / Y / fill / stroke
+ *  scales, not of any single layer. ggsql emits one `SCALE <aes> …` clause per
+ *  aesthetic for the whole chart, so these have a single source of truth (one
+ *  value shown in every layer's axis / colour panel) rather than per-layer
+ *  copies. The fixed fill/stroke colour stays per-layer in `LayerSettings`. */
+export interface ScaleSettings {
+  /** Axis-tick break formatters → `SCALE x|y RENAMING * => '<template>'`.
+   *  Tokens: https://ggsql.org/syntax/clause/scale.html#break-formatting. */
+  xFormat?: string;
+  yFormat?: string;
+  /** Comma-separated break values → `SCALE x|y SETTING breaks => (<values>)`,
+   *  folded into the same clause as the formatter. Raw passthrough. */
+  xBreaks?: string;
+  yBreaks?: string;
+  /** Discrete / continuous palette names → `SCALE fill|stroke TO <palette>`. */
   fillPaletteDiscrete?: string;
   fillPaletteContinuous?: string;
   strokePaletteDiscrete?: string;
@@ -327,19 +329,12 @@ const layerSettingClause = (s: LayerSettings | undefined): string => {
  *  break-formatter fold into a single line. With multiple layers we follow the
  *  same "first non-empty wins" rule used by palettes — the chart has shared
  *  axes regardless of how many layers contribute. */
-function axisScaleClauseFor(aes: "x" | "y", layers: Layer[]): string[] {
-  const breaksKey = aes === "x" ? "xBreaks" : "yBreaks";
-  const formatKey = aes === "x" ? "xFormat" : "yFormat";
-  const firstNonEmpty = (key: "xBreaks" | "yBreaks" | "xFormat" | "yFormat") => {
-    for (const l of layers) {
-      if (l.disabled || !l.settings) continue;
-      const v = l.settings[key]?.trim();
-      if (v) return v;
-    }
-    return undefined;
-  };
-  const breaks = firstNonEmpty(breaksKey);
-  const format = firstNonEmpty(formatKey);
+function axisScaleClauseFor(
+  aes: "x" | "y",
+  scales: ScaleSettings | undefined,
+): string[] {
+  const breaks = (aes === "x" ? scales?.xBreaks : scales?.yBreaks)?.trim();
+  const format = (aes === "x" ? scales?.xFormat : scales?.yFormat)?.trim();
   if (!breaks && !format) return [];
   let clause = `SCALE ${aes}`;
   if (breaks) clause += ` SETTING breaks => (${breaks})`;
@@ -347,21 +342,21 @@ function axisScaleClauseFor(aes: "x" | "y", layers: Layer[]): string[] {
   return [clause];
 }
 
-function scaleClausesFor(aes: "fill" | "stroke", layers: Layer[]): string[] {
-  const discreteKey =
-    aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
-  const continuousKey =
-    aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
-  let firstDiscrete: string | undefined;
-  let firstContinuous: string | undefined;
-  for (const l of layers) {
-    if (l.disabled || !l.settings) continue;
-    if (!firstDiscrete) firstDiscrete = l.settings[discreteKey];
-    if (!firstContinuous) firstContinuous = l.settings[continuousKey];
-  }
+function scaleClausesFor(
+  aes: "fill" | "stroke",
+  scales: ScaleSettings | undefined,
+): string[] {
+  const discrete =
+    aes === "fill"
+      ? scales?.fillPaletteDiscrete
+      : scales?.strokePaletteDiscrete;
+  const continuous =
+    aes === "fill"
+      ? scales?.fillPaletteContinuous
+      : scales?.strokePaletteContinuous;
   const out: string[] = [];
-  if (firstDiscrete) out.push(`SCALE ${aes} TO ${firstDiscrete}`);
-  if (firstContinuous) out.push(`SCALE ${aes} TO ${firstContinuous}`);
+  if (discrete) out.push(`SCALE ${aes} TO ${discrete}`);
+  if (continuous) out.push(`SCALE ${aes} TO ${continuous}`);
   return out;
 }
 
@@ -383,6 +378,7 @@ export function buildQuery(
   project?: ProjectSettings,
   sharedMappings?: Partial<Record<Aes, string>>,
   customLayers?: CustomLayer[],
+  scales?: ScaleSettings,
 ): string | null {
   const mergedLabels: Labels = {};
   for (const l of labels) {
@@ -459,10 +455,10 @@ export function buildQuery(
   if (drawLines.length === 0) return null;
 
   const scaleLines: string[] = [
-    ...scaleClausesFor("fill", layers),
-    ...scaleClausesFor("stroke", layers),
-    ...axisScaleClauseFor("x", layers),
-    ...axisScaleClauseFor("y", layers),
+    ...scaleClausesFor("fill", scales),
+    ...scaleClausesFor("stroke", scales),
+    ...axisScaleClauseFor("x", scales),
+    ...axisScaleClauseFor("y", scales),
   ];
 
   const sharedPairs = sharedMappings

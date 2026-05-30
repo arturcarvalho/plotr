@@ -132,27 +132,21 @@ describe("serialize / deserialize round-trip", () => {
     });
   });
 
-  it("palette settings round-trip", async () => {
+  it("chart-level palette scales round-trip", async () => {
     const s = await serialize({
-      layers: [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "a", y: "b" },
-          settings: {
-            fillPaletteDiscrete: "set1",
-            fillPaletteContinuous: "viridis",
-            strokePaletteDiscrete: "tableau10",
-            strokePaletteContinuous: "plasma",
-          },
-        },
-      ],
+      layers: [{ id: "L", draw: "point", mappings: { x: "a", y: "b" } }],
       labels: [],
       project: {},
+      scales: {
+        fillPaletteDiscrete: "set1",
+        fillPaletteContinuous: "viridis",
+        strokePaletteDiscrete: "tableau10",
+        strokePaletteContinuous: "plasma",
+      },
       sharedMappings: {},
       activeTable: null,
     });
-    expect((await deserialize(s))?.layers[0].settings).toEqual({
+    expect((await deserialize(s))?.scales).toEqual({
       fillPaletteDiscrete: "set1",
       fillPaletteContinuous: "viridis",
       strokePaletteDiscrete: "tableau10",
@@ -972,64 +966,55 @@ describe("layer filter persistence", () => {
 });
 
 describe("axis format persistence", () => {
-  it("round-trips xFormat + yFormat", async () => {
-    const s = await serialize({
-      layers: [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "a", y: "b" },
-          settings: { xFormat: "{:num %.2f}", yFormat: "{:time %Y-%m}" },
-        },
-      ],
-      labels: [],
-      project: {},
-      sharedMappings: {},
-      activeTable: null,
-    });
-    expect((await deserialize(s))?.layers[0].settings).toEqual({
-      xFormat: "{:num %.2f}",
-      yFormat: "{:time %Y-%m}",
-    });
+  const withScales = (scales: Persisted["scales"]): Persisted => ({
+    layers: [{ id: "L", draw: "point", mappings: { x: "a", y: "b" } }],
+    labels: [],
+    project: {},
+    scales,
+    sharedMappings: {},
+    activeTable: null,
   });
 
-  it("round-trips xBreaks + yBreaks", async () => {
-    const s = await serialize({
-      layers: [
-        {
-          id: "L",
-          draw: "point",
-          mappings: { x: "a", y: "b" },
-          settings: { xBreaks: "2000, 2010", yBreaks: "0, 50, 100" },
-        },
-      ],
-      labels: [],
-      project: {},
-      sharedMappings: {},
-      activeTable: null,
-    });
-    expect((await deserialize(s))?.layers[0].settings).toEqual({
+  it("round-trips chart-level xFormat + yFormat + xBreaks + yBreaks", async () => {
+    const s = await serialize(
+      withScales({
+        xFormat: "{:num %.2f}",
+        yFormat: "{:time %Y-%m}",
+        xBreaks: "2000, 2010",
+        yBreaks: "0, 50, 100",
+      }),
+    );
+    expect((await deserialize(s))?.scales).toEqual({
+      xFormat: "{:num %.2f}",
+      yFormat: "{:time %Y-%m}",
       xBreaks: "2000, 2010",
       yBreaks: "0, 50, 100",
     });
   });
 
-  it("empty-string xFormat / yFormat are dropped from the short form", async () => {
-    const s = await serialize({
-      layers: [
+  it("empty scales serialise away (no SC key) and decode to undefined", async () => {
+    const s = await serialize(withScales({ xFormat: "" }));
+    expect((await deserialize(s))?.scales).toBeUndefined();
+  });
+
+  it("migrates old per-layer scale keys into chart-level scales", async () => {
+    // Hand-built legacy hash: scale keys living in per-layer settings (`s`),
+    // no top-level `SC`. First non-empty across layers wins.
+    const payload = await wrap({
+      L: [
+        { i: "L1", d: "point", m: { x: "a", y: "b" }, s: { xfmt: "{:UPPER}" } },
         {
-          id: "L",
-          draw: "point",
-          mappings: { x: "a", y: "b" },
-          settings: { xFormat: "", yFormat: "" },
+          i: "L2",
+          d: "point",
+          m: { x: "a", y: "b" },
+          s: { xfmt: "{:lower}", fpd: "set1" },
         },
       ],
-      labels: [],
-      project: {},
-      sharedMappings: {},
-      activeTable: null,
     });
-    expect((await deserialize(s))?.layers[0].settings).toBeUndefined();
+    const got = await deserialize(payload);
+    expect(got?.scales).toEqual({ xFormat: "{:UPPER}", fillPaletteDiscrete: "set1" });
+    // and the per-layer settings no longer carry the migrated keys
+    expect(got?.layers[0].settings).toBeUndefined();
   });
 });
 

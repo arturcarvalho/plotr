@@ -15,6 +15,7 @@ import {
   type Layer,
   type LayerSettings,
   type ProjectSettings,
+  type ScaleSettings,
 } from "./lib/buildQuery";
 import {
   columnAxisKind,
@@ -90,6 +91,9 @@ export default function App() {
   const [labels, setLabels] = useState<LabelsLayer[]>(() => []);
   const [customLayers, setCustomLayers] = useState<CustomLayer[]>([]);
   const [project, setProject] = useState<ProjectSettings>({});
+  // Chart-level scale settings (axis format/breaks + fill/stroke palettes).
+  // Single source of truth — shown in every layer's axis/colour panel.
+  const [scales, setScales] = useState<ScaleSettings>({});
   const [sharedMappings, setSharedMappings] = useState<
     Partial<Record<Aes, string>>
   >({});
@@ -158,6 +162,7 @@ export default function App() {
           setCustomLayers(data.customLayers);
         }
         setProject(data.project);
+        setScales(data.scales ?? {});
         setSharedMappings(data.sharedMappings);
         // Defer setActiveTable — a separate effect (watching `ready`) re-
         // registers the user's CSV from IndexedDB and THEN applies the name.
@@ -206,6 +211,7 @@ export default function App() {
       labels,
       customLayers: customLayers.length > 0 ? customLayers : undefined,
       project,
+      scales,
       sharedMappings,
       activeTable,
       activePanel,
@@ -255,6 +261,7 @@ export default function App() {
     labels,
     customLayers,
     project,
+    scales,
     sharedMappings,
     activeTable,
     columnKindsCache,
@@ -296,6 +303,7 @@ export default function App() {
       setLabels(data.labels);
       setCustomLayers(data.customLayers ?? []);
       setProject(data.project);
+      setScales(data.scales ?? {});
       setSharedMappings(data.sharedMappings);
       // ggsql is ready by now (we're well past mount) so set the table name
       // directly instead of routing through `pendingActiveTableRef`.
@@ -386,9 +394,19 @@ export default function App() {
             project,
             sharedMappings,
             customLayers,
+            scales,
           )
         : null,
-    [activeTable, layers, labels, customLayers, columns, project, sharedMappings],
+    [
+      activeTable,
+      layers,
+      labels,
+      customLayers,
+      columns,
+      project,
+      sharedMappings,
+      scales,
+    ],
   );
 
   const compatibleDrawsByLayerId = useMemo(() => {
@@ -813,6 +831,7 @@ export default function App() {
     setLabels([]);
     setCustomLayers([]);
     setProject({});
+    setScales({});
     setSharedMappings({});
     setActivePanel({ kind: "layer", layerId: layer.id });
     setSecondaryPanel(null);
@@ -1128,6 +1147,7 @@ export default function App() {
                   <MappingPanel
                     aes={secondaryPanel.aes}
                     settings={panelLayer.settings ?? {}}
+                    scales={scales}
                     mappingKind={resolveMappingKind(
                       panelLayer.mappings[secondaryPanel.aes] ??
                         sharedMappings[secondaryPanel.aes],
@@ -1136,6 +1156,7 @@ export default function App() {
                     onChangeSettings={(s) =>
                       onChangeSettings(panelLayer.id, s)
                     }
+                    onChangeScales={setScales}
                     onClose={closeSecondaryPanel}
                   />
                 ) : null}

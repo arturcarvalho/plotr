@@ -12,6 +12,7 @@ import {
   type Layer,
   type LayerSettings,
   type ProjectSettings,
+  type ScaleSettings,
   type Vjust,
 } from "./buildQuery";
 import type { ColumnKind } from "./ggsql";
@@ -47,6 +48,8 @@ export interface Persisted {
   /** Optional. Omitted when there are no custom layers, for shorter URL hashes. */
   customLayers?: CustomLayer[];
   project: ProjectSettings;
+  /** Chart-level scale settings (axis format / breaks, fill/stroke palettes). */
+  scales?: ScaleSettings;
   sharedMappings: Partial<Record<Aes, string>>;
   /** Built-in (ggsql:*) table name only. User CSV tables are not persisted. */
   activeTable: string | null;
@@ -121,17 +124,20 @@ interface ShortLayerSettings {
   /** Per-layer FILTER predicate (LayerSettings.filter). Short key intentionally
    *  distinct from `f` (fill) — `flt` for filter. */
   flt?: string;
-  /** X/Y axis break-formatter templates (LayerSettings.xFormat / yFormat). */
-  xfmt?: string;
-  yfmt?: string;
-  /** X/Y axis break values (LayerSettings.xBreaks / yBreaks). */
-  xbrk?: string;
-  ybrk?: string;
   slp?: number;
   o?: number;
   z?: number;
   nf?: true;
   ns?: true;
+}
+
+/** Chart-level scale settings (Persisted.scales). Reuses the short keys these
+ *  fields had when they lived per-layer, so an old hash migrates trivially. */
+interface ShortScales {
+  xfmt?: string;
+  yfmt?: string;
+  xbrk?: string;
+  ybrk?: string;
   fpd?: string;
   fpc?: string;
   kpd?: string;
@@ -172,6 +178,8 @@ interface Payload {
   B?: ShortLabels[];
   C?: ShortCustom[];
   P?: ShortProject;
+  /** Chart-level scale settings. */
+  SC?: ShortScales;
   S?: Partial<Record<Aes, string>>;
   t?: string;
   A?: ShortActivePanel;
@@ -234,20 +242,21 @@ function encodeLayerSettings(
     out.rt = s.rotation;
   if (typeof s.format === "string" && s.format.length > 0) out.fmt = s.format;
   if (typeof s.filter === "string" && s.filter.length > 0) out.flt = s.filter;
-  if (typeof s.xFormat === "string" && s.xFormat.length > 0)
-    out.xfmt = s.xFormat;
-  if (typeof s.yFormat === "string" && s.yFormat.length > 0)
-    out.yfmt = s.yFormat;
-  if (typeof s.xBreaks === "string" && s.xBreaks.length > 0)
-    out.xbrk = s.xBreaks;
-  if (typeof s.yBreaks === "string" && s.yBreaks.length > 0)
-    out.ybrk = s.yBreaks;
   if (typeof s.slope === "number" && !Number.isNaN(s.slope))
     out.slp = s.slope;
   if (typeof s.opacity === "number" && !Number.isNaN(s.opacity)) out.o = s.opacity;
   if (typeof s.size === "number" && !Number.isNaN(s.size)) out.z = s.size;
   if (s.noFill === true) out.nf = true;
   if (s.noStroke === true) out.ns = true;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function encodeScales(s: ScaleSettings): ShortScales {
+  const out: ShortScales = {};
+  if (isNonEmptyString(s.xFormat)) out.xfmt = s.xFormat;
+  if (isNonEmptyString(s.yFormat)) out.yfmt = s.yFormat;
+  if (isNonEmptyString(s.xBreaks)) out.xbrk = s.xBreaks;
+  if (isNonEmptyString(s.yBreaks)) out.ybrk = s.yBreaks;
   if (isNonEmptyString(s.fillPaletteDiscrete)) out.fpd = s.fillPaletteDiscrete;
   if (isNonEmptyString(s.fillPaletteContinuous))
     out.fpc = s.fillPaletteContinuous;
@@ -255,7 +264,25 @@ function encodeLayerSettings(
     out.kpd = s.strokePaletteDiscrete;
   if (isNonEmptyString(s.strokePaletteContinuous))
     out.kpc = s.strokePaletteContinuous;
-  return Object.keys(out).length > 0 ? out : undefined;
+  return out;
+}
+
+/** Decode a chart-level scales object. `raw` is either the new top-level
+ *  `SC` payload or an old per-layer `s` object (same short keys), so this
+ *  doubles as the migration reader. */
+function decodeScales(raw: unknown): ScaleSettings {
+  const out: ScaleSettings = {};
+  if (!raw || typeof raw !== "object") return out;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.xfmt === "string") out.xFormat = r.xfmt;
+  if (typeof r.yfmt === "string") out.yFormat = r.yfmt;
+  if (typeof r.xbrk === "string") out.xBreaks = r.xbrk;
+  if (typeof r.ybrk === "string") out.yBreaks = r.ybrk;
+  if (typeof r.fpd === "string") out.fillPaletteDiscrete = r.fpd;
+  if (typeof r.fpc === "string") out.fillPaletteContinuous = r.fpc;
+  if (typeof r.kpd === "string") out.strokePaletteDiscrete = r.kpd;
+  if (typeof r.kpc === "string") out.strokePaletteContinuous = r.kpc;
+  return out;
 }
 
 function encodeLayer(l: Layer): ShortLayer {
@@ -385,19 +412,11 @@ function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
   if (typeof r.rt === "number" && !Number.isNaN(r.rt)) out.rotation = r.rt;
   if (typeof r.fmt === "string") out.format = r.fmt;
   if (typeof r.flt === "string") out.filter = r.flt;
-  if (typeof r.xfmt === "string") out.xFormat = r.xfmt;
-  if (typeof r.yfmt === "string") out.yFormat = r.yfmt;
-  if (typeof r.xbrk === "string") out.xBreaks = r.xbrk;
-  if (typeof r.ybrk === "string") out.yBreaks = r.ybrk;
   if (typeof r.slp === "number" && !Number.isNaN(r.slp)) out.slope = r.slp;
   if (typeof r.o === "number" && !Number.isNaN(r.o)) out.opacity = r.o;
   if (typeof r.z === "number" && !Number.isNaN(r.z)) out.size = r.z;
   if (r.nf === true) out.noFill = true;
   if (r.ns === true) out.noStroke = true;
-  if (typeof r.fpd === "string") out.fillPaletteDiscrete = r.fpd;
-  if (typeof r.fpc === "string") out.fillPaletteContinuous = r.fpc;
-  if (typeof r.kpd === "string") out.strokePaletteDiscrete = r.kpd;
-  if (typeof r.kpc === "string") out.strokePaletteContinuous = r.kpc;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -580,6 +599,10 @@ export async function serialize(p: Persisted): Promise<string> {
   }
   const project = encodeProject(p.project);
   if (Object.keys(project).length > 0) payload.P = project;
+  if (p.scales) {
+    const scales = encodeScales(p.scales);
+    if (Object.keys(scales).length > 0) payload.SC = scales;
+  }
   const shared = encodeMappings(p.sharedMappings);
   if (Object.keys(shared).length > 0) payload.S = shared;
   // Any non-empty table name round-trips. Built-in (`ggsql:*`) tables are
@@ -636,6 +659,7 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
     B?: unknown;
     C?: unknown;
     P?: unknown;
+    SC?: unknown;
     S?: unknown;
     t?: unknown;
     A?: unknown;
@@ -668,6 +692,21 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
   if (customLayers && customLayers.length > 0) {
     out.customLayers = customLayers;
   }
+  // Chart-level scales: the new `SC` payload, plus migration of the old
+  // per-layer scale keys (first non-empty across layers wins, SC takes
+  // precedence) so existing hashes keep their format / breaks / palettes.
+  let scales = decodeScales(obj.SC);
+  if (Array.isArray(obj.L)) {
+    for (const sl of obj.L) {
+      const fromLayer = decodeScales(
+        sl && typeof sl === "object"
+          ? (sl as { s?: unknown }).s
+          : undefined,
+      );
+      scales = { ...fromLayer, ...scales };
+    }
+  }
+  if (Object.keys(scales).length > 0) out.scales = scales;
   const activePanel = decodeActivePanel(obj.A, layers, labels, customLayers);
   if (activePanel) out.activePanel = activePanel;
   const secondaryPanel = decodeSecondaryPanel(obj.D, activePanel);

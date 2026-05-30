@@ -14,7 +14,7 @@ import Select, {
   type SingleValueProps,
   type StylesConfig,
 } from "react-select";
-import type { Aes, LayerSettings } from "../lib/buildQuery";
+import type { Aes, LayerSettings, ScaleSettings } from "../lib/buildQuery";
 import {
   CONTINUOUS_PALETTES,
   DEFAULT_CONTINUOUS,
@@ -41,8 +41,13 @@ export type MappingKind = "fixed" | "discrete" | "continuous";
 interface Props {
   aes: Aes;
   settings: LayerSettings;
+  /** Chart-level scale settings (axis format/breaks + fill/stroke palettes).
+   *  Shared across every layer; the palette tabs + axis fields read/write here
+   *  instead of per-layer `settings`. */
+  scales: ScaleSettings;
   mappingKind: MappingKind;
   onChangeSettings: (next: LayerSettings) => void;
+  onChangeScales: (next: ScaleSettings) => void;
   onClose: () => void;
 }
 
@@ -232,8 +237,10 @@ const paletteSelectStyles: StylesConfig<
 export function MappingPanel({
   aes,
   settings,
+  scales,
   mappingKind,
   onChangeSettings,
+  onChangeScales,
   onClose,
 }: Props) {
   const aesLabel =
@@ -267,8 +274,8 @@ export function MappingPanel({
     const continuousKey =
       aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
     fixedSet = !!settings[fixedKey] || !!settings[noKey];
-    discreteSet = !!settings[discreteKey];
-    continuousSet = !!settings[continuousKey];
+    discreteSet = !!scales[discreteKey];
+    continuousSet = !!scales[continuousKey];
   }
 
   return (
@@ -295,7 +302,9 @@ export function MappingPanel({
               aes={aes}
               tab={tab}
               settings={settings}
+              scales={scales}
               onChangeSettings={onChangeSettings}
+              onChangeScales={onChangeScales}
             />
           )}
           {aes === "opacity" && (
@@ -330,26 +339,22 @@ export function MappingPanel({
             <div className="space-y-3 p-3">
               <AxisBreaksField
                 aes={aes}
-                value={
-                  (aes === "x" ? settings.xBreaks : settings.yBreaks) ?? ""
-                }
+                value={(aes === "x" ? scales.xBreaks : scales.yBreaks) ?? ""}
                 onChange={(v) => {
-                  const next = { ...settings };
+                  const next = { ...scales };
                   if (v) next[aes === "x" ? "xBreaks" : "yBreaks"] = v;
                   else delete next[aes === "x" ? "xBreaks" : "yBreaks"];
-                  onChangeSettings(next);
+                  onChangeScales(next);
                 }}
               />
               <AxisFormatField
                 aes={aes}
-                value={
-                  (aes === "x" ? settings.xFormat : settings.yFormat) ?? ""
-                }
+                value={(aes === "x" ? scales.xFormat : scales.yFormat) ?? ""}
                 onChange={(v) => {
-                  const next = { ...settings };
+                  const next = { ...scales };
                   if (v) next[aes === "x" ? "xFormat" : "yFormat"] = v;
                   else delete next[aes === "x" ? "xFormat" : "yFormat"];
-                  onChangeSettings(next);
+                  onChangeScales(next);
                 }}
               />
             </div>
@@ -385,13 +390,18 @@ function ColorAestheticPanel({
   aes,
   tab,
   settings,
+  scales,
   onChangeSettings,
+  onChangeScales,
 }: {
   aes: "fill" | "stroke";
   tab: MappingKind;
   settings: LayerSettings;
+  scales: ScaleSettings;
   onChangeSettings: (next: LayerSettings) => void;
+  onChangeScales: (next: ScaleSettings) => void;
 }) {
+  // Fixed colour is per-layer (settings); the palettes are chart-level scales.
   const discreteKey =
     aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
   const continuousKey =
@@ -408,17 +418,17 @@ function ColorAestheticPanel({
       )}
       {tab === "discrete" && (
         <DiscreteTab
-          value={settings[discreteKey] ?? null}
+          value={scales[discreteKey] ?? null}
           onChange={(v) =>
-            onChangeSettings({ ...settings, [discreteKey]: v ?? undefined })
+            onChangeScales({ ...scales, [discreteKey]: v ?? undefined })
           }
         />
       )}
       {tab === "continuous" && (
         <ContinuousTab
-          value={settings[continuousKey] ?? null}
+          value={scales[continuousKey] ?? null}
           onChange={(v) =>
-            onChangeSettings({ ...settings, [continuousKey]: v ?? undefined })
+            onChangeScales({ ...scales, [continuousKey]: v ?? undefined })
           }
         />
       )}
