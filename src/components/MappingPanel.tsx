@@ -328,6 +328,18 @@ export function MappingPanel({
           )}
           {(aes === "x" || aes === "y") && (
             <div className="space-y-3 p-3">
+              <AxisBreaksField
+                aes={aes}
+                value={
+                  (aes === "x" ? settings.xBreaks : settings.yBreaks) ?? ""
+                }
+                onChange={(v) => {
+                  const next = { ...settings };
+                  if (v) next[aes === "x" ? "xBreaks" : "yBreaks"] = v;
+                  else delete next[aes === "x" ? "xBreaks" : "yBreaks"];
+                  onChangeSettings(next);
+                }}
+              />
               <AxisFormatField
                 aes={aes}
                 value={
@@ -830,11 +842,51 @@ function CloseIcon() {
   );
 }
 
-/** Per-axis break-label formatter. Emits a standalone `SCALE x RENAMING * =>
- *  '<template>'` (or `y`). Templates use ggsql's break-format tokens — `{}`
- *  (bare echo), `{:UPPER}`, `{:lower}`, `{:Title}`, `{:num <printf>}`,
- *  `{:time <strftime>}`. See the docs link in the helper text for the full
- *  reference. Empty input clears the field; the SCALE clause is then omitted. */
+/** Per-axis break values. Emits `SCALE x SETTING breaks => (<values>)` (or `y`)
+ *  to limit the visible axis ticks. Free-form passthrough — the user types the
+ *  comma-separated values, plotr wraps them in parens; ggsql validates. Empty
+ *  input clears the field; the breaks subclause is then omitted. */
+function AxisBreaksField({
+  aes,
+  value,
+  onChange,
+}: {
+  aes: "x" | "y";
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block">
+        <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
+          <span>Breaks ({aes})</span>
+          <span className="text-[10px] text-stone-500">
+            {value.trim() ? "set" : "off"}
+          </span>
+        </span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="2000, 2010"
+          spellCheck={false}
+          className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
+        />
+      </label>
+      <p className="mt-1 font-mono text-[10px] leading-relaxed text-stone-500">
+        Limit visible ticks to these values, comma-separated. Numbers bare;
+        quote strings / dates as ggsql needs.
+      </p>
+    </div>
+  );
+}
+
+/** Per-axis break-label formatter. Emits the `RENAMING * => '<template>'`
+ *  subclause of the axis `SCALE x` (or `y`) clause. Templates use ggsql's
+ *  break-format tokens — `{}` (bare echo), `{:UPPER}`, `{:lower}`, `{:Title}`,
+ *  `{:num <printf>}`, `{:time <strftime>}`. See the docs link in the helper
+ *  text for the full reference. Empty input clears the field; the RENAMING
+ *  subclause is then omitted. */
 function AxisFormatField({
   aes,
   value,

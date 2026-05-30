@@ -2173,3 +2173,74 @@ describe("buildQuery emits per-layer PARTITION BY", () => {
     );
   });
 });
+
+describe("buildQuery emits SCALE … SETTING breaks for axis breaks", () => {
+  const pointLayer = (settings: Layer["settings"]): Layer => ({
+    id: "L",
+    draw: "point",
+    mappings: { x: "bill_len", y: "bill_dep" },
+    settings,
+  });
+
+  it("xBreaks emits SCALE x SETTING breaks => (<values>)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [pointLayer({ xBreaks: "2000, 2010" })],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE x SETTING breaks => (2000, 2010)");
+  });
+
+  it("yBreaks emits SCALE y SETTING breaks => (<values>)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [pointLayer({ yBreaks: "0, 50, 100" })],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SCALE y SETTING breaks => (0, 50, 100)");
+  });
+
+  it("breaks + format fold into ONE SCALE clause, SETTING before RENAMING", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [pointLayer({ xBreaks: "2000, 2010", xFormat: "{:num %.0f}" })],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "SCALE x SETTING breaks => (2000, 2010) RENAMING * => '{:num %.0f}'",
+    );
+    // exactly one SCALE x line
+    expect(q!.split("\n").filter((l) => l.startsWith("SCALE x"))).toHaveLength(
+      1,
+    );
+  });
+
+  it("empty / whitespace breaks emits no SETTING breaks", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [pointLayer({ xBreaks: "   " })],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("SETTING breaks");
+  });
+
+  it("first non-empty xBreaks across enabled layers wins", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        { ...pointLayer({}), id: "L1" },
+        { ...pointLayer({ xBreaks: "1, 2" }), id: "L2" },
+      ],
+      [],
+      COLS,
+    );
+    expect(q!.split("\n").filter((l) => l.startsWith("SCALE x"))).toHaveLength(
+      1,
+    );
+    expect(q).toContain("SCALE x SETTING breaks => (1, 2)");
+  });
+});

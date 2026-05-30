@@ -993,6 +993,27 @@ describe("axis format persistence", () => {
     });
   });
 
+  it("round-trips xBreaks + yBreaks", async () => {
+    const s = await serialize({
+      layers: [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "a", y: "b" },
+          settings: { xBreaks: "2000, 2010", yBreaks: "0, 50, 100" },
+        },
+      ],
+      labels: [],
+      project: {},
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.layers[0].settings).toEqual({
+      xBreaks: "2000, 2010",
+      yBreaks: "0, 50, 100",
+    });
+  });
+
   it("empty-string xFormat / yFormat are dropped from the short form", async () => {
     const s = await serialize({
       layers: [

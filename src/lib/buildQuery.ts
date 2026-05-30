@@ -122,6 +122,13 @@ export interface LayerSettings {
   xFormat?: string;
   /** Same as `xFormat`, for the Y axis. */
   yFormat?: string;
+  /** Comma-separated break values for the X axis. Emitted inside the same
+   *  `SCALE x` clause as `xFormat` — `SCALE x SETTING breaks => (<values>)` —
+   *  to limit the visible axis ticks. Raw passthrough (ggsql validates); one
+   *  per chart, first non-empty across enabled layers wins. */
+  xBreaks?: string;
+  /** Same as `xBreaks`, for the Y axis. */
+  yBreaks?: string;
   slope?: number;
   opacity?: number;
   size?: number;
@@ -314,18 +321,30 @@ const layerSettingClause = (s: LayerSettings | undefined): string => {
   return entries.length ? ` SETTING ${settingPairs(entries)}` : "";
 };
 
-/** Emit the optional `SCALE <aes> RENAMING * => '<template>'` break-formatter
- *  for the X / Y axis. ggsql allows one RENAMING per scale; with multiple
- *  layers we follow the same "first non-empty wins" rule used by palettes —
- *  the chart has shared axes regardless of how many layers contribute. */
-function axisFormatClauseFor(aes: "x" | "y", layers: Layer[]): string[] {
-  const key = aes === "x" ? "xFormat" : "yFormat";
-  for (const l of layers) {
-    if (l.disabled || !l.settings) continue;
-    const v = l.settings[key]?.trim();
-    if (v) return [`SCALE ${aes} RENAMING * => '${escSql(v)}'`];
-  }
-  return [];
+/** Emit the optional `SCALE <aes> [SETTING breaks => (…)] [RENAMING * => '…']`
+ *  clause for the X / Y axis. ggsql takes one SCALE clause per aesthetic with
+ *  optional subclauses in `SETTING … RENAMING …` order, so axis breaks and the
+ *  break-formatter fold into a single line. With multiple layers we follow the
+ *  same "first non-empty wins" rule used by palettes — the chart has shared
+ *  axes regardless of how many layers contribute. */
+function axisScaleClauseFor(aes: "x" | "y", layers: Layer[]): string[] {
+  const breaksKey = aes === "x" ? "xBreaks" : "yBreaks";
+  const formatKey = aes === "x" ? "xFormat" : "yFormat";
+  const firstNonEmpty = (key: "xBreaks" | "yBreaks" | "xFormat" | "yFormat") => {
+    for (const l of layers) {
+      if (l.disabled || !l.settings) continue;
+      const v = l.settings[key]?.trim();
+      if (v) return v;
+    }
+    return undefined;
+  };
+  const breaks = firstNonEmpty(breaksKey);
+  const format = firstNonEmpty(formatKey);
+  if (!breaks && !format) return [];
+  let clause = `SCALE ${aes}`;
+  if (breaks) clause += ` SETTING breaks => (${breaks})`;
+  if (format) clause += ` RENAMING * => '${escSql(format)}'`;
+  return [clause];
 }
 
 function scaleClausesFor(aes: "fill" | "stroke", layers: Layer[]): string[] {
@@ -442,8 +461,8 @@ export function buildQuery(
   const scaleLines: string[] = [
     ...scaleClausesFor("fill", layers),
     ...scaleClausesFor("stroke", layers),
-    ...axisFormatClauseFor("x", layers),
-    ...axisFormatClauseFor("y", layers),
+    ...axisScaleClauseFor("x", layers),
+    ...axisScaleClauseFor("y", layers),
   ];
 
   const sharedPairs = sharedMappings

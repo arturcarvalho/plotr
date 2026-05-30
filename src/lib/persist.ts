@@ -124,6 +124,9 @@ interface ShortLayerSettings {
   /** X/Y axis break-formatter templates (LayerSettings.xFormat / yFormat). */
   xfmt?: string;
   yfmt?: string;
+  /** X/Y axis break values (LayerSettings.xBreaks / yBreaks). */
+  xbrk?: string;
+  ybrk?: string;
   slp?: number;
   o?: number;
   z?: number;
@@ -235,6 +238,10 @@ function encodeLayerSettings(
     out.xfmt = s.xFormat;
   if (typeof s.yFormat === "string" && s.yFormat.length > 0)
     out.yfmt = s.yFormat;
+  if (typeof s.xBreaks === "string" && s.xBreaks.length > 0)
+    out.xbrk = s.xBreaks;
+  if (typeof s.yBreaks === "string" && s.yBreaks.length > 0)
+    out.ybrk = s.yBreaks;
   if (typeof s.slope === "number" && !Number.isNaN(s.slope))
     out.slp = s.slope;
   if (typeof s.opacity === "number" && !Number.isNaN(s.opacity)) out.o = s.opacity;
@@ -380,6 +387,8 @@ function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
   if (typeof r.flt === "string") out.filter = r.flt;
   if (typeof r.xfmt === "string") out.xFormat = r.xfmt;
   if (typeof r.yfmt === "string") out.yFormat = r.yfmt;
+  if (typeof r.xbrk === "string") out.xBreaks = r.xbrk;
+  if (typeof r.ybrk === "string") out.yBreaks = r.ybrk;
   if (typeof r.slp === "number" && !Number.isNaN(r.slp)) out.slope = r.slp;
   if (typeof r.o === "number" && !Number.isNaN(r.o)) out.opacity = r.o;
   if (typeof r.z === "number" && !Number.isNaN(r.z)) out.size = r.z;
