@@ -126,8 +126,7 @@ export function HeaderMenu({
                 Alpha
               </span>
               <span className="text-xs leading-snug text-amber-800">
-                Plotr is in early development.<br/>
-                Expect bugs and changes.
+                Things may change or break
               </span>
             </div>
           </div>,
