@@ -245,9 +245,11 @@ export function MappingPanel({
           ? "Fill color"
           : aes === "stroke"
             ? "Line color"
-            : cap(aes);
+            : aes === "color"
+              ? "Color"
+              : cap(aes);
 
-  const isColor = aes === "fill" || aes === "stroke";
+  const isColor = aes === "fill" || aes === "stroke" || aes === "color";
 
   // Tab state lives here so the TabStrip can be anchored at the bottom of the
   // card while the active tab body scrolls in the middle region.
@@ -260,12 +262,22 @@ export function MappingPanel({
   let discreteSet = false;
   let continuousSet = false;
   if (isColor) {
-    const fixedKey = aes === "fill" ? "fill" : "stroke";
-    const noKey = aes === "fill" ? "noFill" : "noStroke";
+    const fixedKey =
+      aes === "fill" ? "fill" : aes === "stroke" ? "stroke" : "color";
+    const noKey =
+      aes === "fill" ? "noFill" : aes === "stroke" ? "noStroke" : "noColor";
     const discreteKey =
-      aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
+      aes === "fill"
+        ? "fillPaletteDiscrete"
+        : aes === "stroke"
+          ? "strokePaletteDiscrete"
+          : "colorPaletteDiscrete";
     const continuousKey =
-      aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
+      aes === "fill"
+        ? "fillPaletteContinuous"
+        : aes === "stroke"
+          ? "strokePaletteContinuous"
+          : "colorPaletteContinuous";
     fixedSet = !!settings[fixedKey] || !!settings[noKey];
     discreteSet = !!settings[discreteKey];
     continuousSet = !!settings[continuousKey];
@@ -375,15 +387,23 @@ function ColorAestheticPanel({
   settings,
   onChangeSettings,
 }: {
-  aes: "fill" | "stroke";
+  aes: "fill" | "stroke" | "color";
   tab: MappingKind;
   settings: LayerSettings;
   onChangeSettings: (next: LayerSettings) => void;
 }) {
   const discreteKey =
-    aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
+    aes === "fill"
+      ? "fillPaletteDiscrete"
+      : aes === "stroke"
+        ? "strokePaletteDiscrete"
+        : "colorPaletteDiscrete";
   const continuousKey =
-    aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
+    aes === "fill"
+      ? "fillPaletteContinuous"
+      : aes === "stroke"
+        ? "strokePaletteContinuous"
+        : "colorPaletteContinuous";
 
   return (
     <div className="flex flex-col">
@@ -500,12 +520,14 @@ function FixedTab({
   settings,
   onChangeSettings,
 }: {
-  aes: "fill" | "stroke";
+  aes: "fill" | "stroke" | "color";
   settings: LayerSettings;
   onChangeSettings: (next: LayerSettings) => void;
 }) {
-  const fixedKey = aes === "fill" ? "fill" : "stroke";
-  const noKey = aes === "fill" ? "noFill" : "noStroke";
+  const fixedKey =
+    aes === "fill" ? "fill" : aes === "stroke" ? "stroke" : "color";
+  const noKey =
+    aes === "fill" ? "noFill" : aes === "stroke" ? "noStroke" : "noColor";
   const value = settings[fixedKey] ?? null;
   const noValue = !!settings[noKey];
   const setValue = (v: string | null) =>
@@ -545,7 +567,13 @@ function FixedTab({
       </div>
       <CustomColorField value={value} onChange={setValue} />
       <ToggleField
-        label={aes === "fill" ? "No fill color" : "No line color"}
+        label={
+          aes === "fill"
+            ? "No fill color"
+            : aes === "stroke"
+              ? "No line color"
+              : "No color"
+        }
         checked={noValue}
         onChange={setNo}
       />

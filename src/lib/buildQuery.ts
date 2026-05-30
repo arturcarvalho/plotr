@@ -10,9 +10,16 @@ const QUERY_HEADER = `-- Built on plotr.org with ggsql v${ggsqlPkg.version}`;
 
 // Aesthetics that apply to every chart type — used for render gating, shared
 // mapping detection, and shared mapping emission.
+//
+// `color` is a ggsql meta-aesthetic that controls both fill and stroke. plotr
+// surfaces it as a single "Color" dropzone; users can click Split to break it
+// into separate Fill / Line color rows. When `mappings.color` is set, plotr
+// emits `<col> AS color` (one MAPPING clause) instead of separate fill/stroke
+// pairs.
 export const UNIVERSAL_AESTHETICS = [
   "x",
   "y",
+  "color",
   "fill",
   "stroke",
   "opacity",
@@ -131,6 +138,19 @@ export interface LayerSettings {
   fillPaletteContinuous?: string;
   strokePaletteDiscrete?: string;
   strokePaletteContinuous?: string;
+  /** Joined-Color meta-aesthetic mirrors of the fill/stroke fields. Used when
+   *  the layer is in joined "Color" mode (`colorSplit` undefined or false).
+   *  Emitted as `SETTING color => '<col>'` / `SCALE color TO <palette>` so
+   *  ggsql applies one value to both fill and stroke. */
+  color?: string;
+  noColor?: boolean;
+  colorPaletteDiscrete?: string;
+  colorPaletteContinuous?: string;
+  /** UI flag controlling the Color row layout. `true` → render two rows
+   *  (Fill color + Line color); `undefined`/`false` → render the joined
+   *  Color row with a Split button. Has no direct emission effect — emission
+   *  is driven by which mappings/settings are actually set. */
+  colorSplit?: boolean;
 }
 
 export interface Layer {
@@ -244,6 +264,7 @@ const settingPairs = (entries: Array<[string, unknown]>): string =>
 const SETTING_ORDER = [
   "width",
   "position",
+  "color",
   "fill",
   "stroke",
   "linewidth",
@@ -283,7 +304,9 @@ const layerSettingClause = (s: LayerSettings | undefined): string => {
   if (!s) return "";
   const entries: Array<[string, unknown]> = [];
   for (const k of SETTING_ORDER) {
-    // noFill / noStroke push an explicit `null` below; skip the colour entry.
+    // noColor / noFill / noStroke push an explicit `null` below; skip the
+    // colour entry so we don't emit both a value and a null.
+    if (k === "color" && s.noColor) continue;
     if (k === "fill" && s.noFill) continue;
     if (k === "stroke" && s.noStroke) continue;
     if (k === "offset") {
@@ -297,6 +320,7 @@ const layerSettingClause = (s: LayerSettings | undefined): string => {
     }
     if (s[k] !== undefined && s[k] !== null) entries.push([k, s[k]]);
   }
+  if (s.noColor) entries.push(["color", null]);
   if (s.noFill) entries.push(["fill", null]);
   if (s.noStroke) entries.push(["stroke", null]);
   return entries.length ? ` SETTING ${settingPairs(entries)}` : "";
@@ -316,11 +340,22 @@ function axisFormatClauseFor(aes: "x" | "y", layers: Layer[]): string[] {
   return [];
 }
 
-function scaleClausesFor(aes: "fill" | "stroke", layers: Layer[]): string[] {
+function scaleClausesFor(
+  aes: "color" | "fill" | "stroke",
+  layers: Layer[],
+): string[] {
   const discreteKey =
-    aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
+    aes === "color"
+      ? "colorPaletteDiscrete"
+      : aes === "fill"
+        ? "fillPaletteDiscrete"
+        : "strokePaletteDiscrete";
   const continuousKey =
-    aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
+    aes === "color"
+      ? "colorPaletteContinuous"
+      : aes === "fill"
+        ? "fillPaletteContinuous"
+        : "strokePaletteContinuous";
   let firstDiscrete: string | undefined;
   let firstContinuous: string | undefined;
   for (const l of layers) {
@@ -396,6 +431,7 @@ export function buildQuery(
     const emittedDraw = draw === "pie" ? "bar" : draw;
     const dataMaps = AESTHETICS.filter((a) => {
       if (!l.mappings[a]) return false;
+      if (a === "color" && l.settings?.noColor) return false;
       if (a === "fill" && l.settings?.noFill) return false;
       if (a === "stroke" && l.settings?.noStroke) return false;
       // `label` is text-only; suppress for any other geom.
@@ -428,6 +464,7 @@ export function buildQuery(
   if (drawLines.length === 0) return null;
 
   const scaleLines: string[] = [
+    ...scaleClausesFor("color", layers),
     ...scaleClausesFor("fill", layers),
     ...scaleClausesFor("stroke", layers),
     ...axisFormatClauseFor("x", layers),

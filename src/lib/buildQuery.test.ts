@@ -341,6 +341,24 @@ describe("buildQuery emits fill/stroke directly", () => {
     expect(q).not.toContain("AS color");
     expect(q).toContain("species AS stroke");
   });
+
+  it("mapping color emits AS color (joined Color view)", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", color: "species" },
+        } as Layer,
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("species AS color");
+    expect(q).not.toContain("species AS fill");
+    expect(q).not.toContain("species AS stroke");
+  });
 });
 
 describe("buildQuery emits per-layer SETTING", () => {
@@ -399,6 +417,23 @@ describe("buildQuery emits per-layer SETTING", () => {
     expect(q).toContain(
       "DRAW point MAPPING bill_len AS x, bill_dep AS y SETTING fill => 'blue', opacity => 0.6, size => 3",
     );
+  });
+
+  it("fixed color setting emits SETTING color => 'red'", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          settings: { color: "red" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("SETTING color => 'red'");
   });
 
   it("stroke setting on line", () => {
@@ -1094,6 +1129,24 @@ describe("noFill / noStroke toggles", () => {
     expect(q).toContain("fill => null");
   });
 
+  it("noColor skips color mapping and emits color => null", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", color: "species" },
+          settings: { noColor: true },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("species AS color");
+    expect(q).toContain("SETTING color => null");
+  });
+
   it("noFill false (or undefined) leaves fill behaviour unchanged", () => {
     const q = buildQuery(
       "ggsql:penguins",
@@ -1245,6 +1298,42 @@ describe("buildQuery emits SCALE for palettes", () => {
     );
     expect(q).toContain("bill_dep AS fill");
     expect(q).toContain("SCALE fill TO viridis");
+  });
+
+  it("color mapping + colorPaletteDiscrete → SCALE color TO <palette>", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", color: "species" },
+          settings: { colorPaletteDiscrete: "set1" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("species AS color");
+    expect(q).toContain("SCALE color TO set1");
+  });
+
+  it("color mapping + colorPaletteContinuous → SCALE color TO <palette>", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep", color: "bill_dep" },
+          settings: { colorPaletteContinuous: "viridis" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("bill_dep AS color");
+    expect(q).toContain("SCALE color TO viridis");
   });
 
   it("date fill mapping uses fillPaletteContinuous", () => {

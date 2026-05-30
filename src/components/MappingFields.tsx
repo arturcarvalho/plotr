@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { Aes } from "../lib/buildQuery";
 import { Dropzone } from "./Dropzone";
+import { Tooltip } from "./Tooltip";
 
 interface Props {
   mappings: Partial<Record<Aes, string>>;
@@ -19,6 +20,18 @@ interface Props {
     src?: { layerId: string; aes: Aes },
   ) => void;
   onToggleSettings?: (aes: Aes) => void;
+  /** Color-row layout flag. When false / undefined → render a single joined
+   *  Color row with an embedded Split button. When true → render Fill color +
+   *  Line color rows with a Join control between them. */
+  colorSplit?: boolean;
+  /** Transition the Color rows joined → split. The parent atomically copies
+   *  `mappings.color` to `mappings.fill` and `mappings.stroke`, clears
+   *  `mappings.color`, and flips `colorSplit` to true. */
+  onSplitColor?: () => void;
+  /** Transition the Color rows split → joined. Per the join rule, fill wins
+   *  (stroke is discarded). Parent moves `mappings.fill` into `mappings.color`,
+   *  clears `mappings.fill` + `mappings.stroke`, and flips `colorSplit` to false. */
+  onJoinColor?: () => void;
 }
 
 export function MappingFields({
@@ -30,6 +43,9 @@ export function MappingFields({
   onMap,
   onDrop,
   onToggleSettings,
+  colorSplit,
+  onSplitColor,
+  onJoinColor,
 }: Props) {
   const isMissing = (aes: Aes) =>
     missingRequired ? missingRequired.includes(aes) : false;
@@ -88,8 +104,31 @@ export function MappingFields({
           {labeledField("ymax", "Y max", "Upper bound")}
         </>
       )}
-      {labeledField("fill", "Fill color")}
-      {labeledField("stroke", "Line color")}
+      {colorSplit ? (
+        <div>
+          {labeledField("fill", "Fill color")}
+          {onJoinColor && <JoinControl onJoin={onJoinColor} />}
+          {labeledField("stroke", "Line color")}
+        </div>
+      ) : (
+        <Field
+          label="Color"
+          open={openMappingAes === "color"}
+          onToggleSettings={
+            onToggleSettings ? () => onToggleSettings("color") : undefined
+          }
+        >
+          <DropzoneWithSplit
+            placeholder={undefined}
+            value={mappings.color}
+            required={false}
+            source={{ layerId: sourceId, aes: "color" }}
+            onDrop={(c, src) => onDrop("color", c, src)}
+            onClear={() => onMap("color", undefined)}
+            onSplit={onSplitColor}
+          />
+        </Field>
+      )}
       {labeledField("opacity", "Opacity")}
       {labeledField("size", "Size")}
       {resolvedDraw === "text" &&
@@ -277,5 +316,100 @@ function ChevronRightIcon() {
     >
       <polyline points="9 18 15 12 9 6" />
     </svg>
+  );
+}
+
+// Drag/drop source shape (mirrors the local interface in Dropzone.tsx so
+// callers can pass through the existing onDrop signature).
+interface DropSource {
+  layerId: string;
+  aes: Aes;
+}
+
+/** Wrapper around `Dropzone` that overlays a dimmed "Split" pill on the right
+ *  edge of the dashed box. The pill brightens whenever the dropzone is
+ *  hovered (drag-over OR mouse-over) and an instant-appear `<Tooltip>`
+ *  explains the action. Drop semantics fall through to the inner `Dropzone`. */
+function DropzoneWithSplit({
+  placeholder,
+  value,
+  required,
+  source,
+  onDrop,
+  onClear,
+  onSplit,
+}: {
+  placeholder?: string;
+  value?: string;
+  required?: boolean;
+  source: DropSource;
+  onDrop: (col: string, src?: DropSource) => void;
+  onClear: () => void;
+  onSplit?: () => void;
+}) {
+  const [hot, setHot] = useState(false);
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setHot(true)}
+      onMouseLeave={() => setHot(false)}
+    >
+      <Dropzone
+        placeholder={placeholder}
+        value={value}
+        required={required}
+        source={source}
+        onDrop={onDrop}
+        onClear={onClear}
+      />
+      {onSplit && (
+        <div
+          className={[
+            "pointer-events-none absolute inset-y-0 right-2 flex items-center transition-opacity",
+            hot ? "opacity-100" : "opacity-40",
+          ].join(" ")}
+        >
+          <Tooltip text="Split into separate Fill and Line colors">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSplit();
+              }}
+              className="pointer-events-auto rounded border border-stone-300 bg-white px-2 py-0.5 font-mono text-[11px] text-stone-600 hover:bg-stone-100 hover:text-stone-800"
+            >
+              Split
+            </button>
+          </Tooltip>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Centred "Join" pill flanked by two short vertical hairlines that visually
+ *  link the Fill color and Line color rows when the Color view is split. The
+ *  outer flex mirrors `Field`'s dropzone-row layout (flex-1 slot + w-10
+ *  chevron-spacer) so the pill and hairlines sit centred on the dropzone
+ *  column above/below, not on the wrapper centre. Clicking collapses the rows
+ *  back into a single joined Color (fill wins; stroke is discarded). */
+function JoinControl({ onJoin }: { onJoin: () => void }) {
+  return (
+    <div className="flex items-stretch gap-1">
+      <div className="flex flex-1 flex-col items-center">
+        <span aria-hidden className="h-2 w-px bg-stone-300" />
+        <Tooltip text="Combine Fill and Line color (Line color reverts to Fill)">
+          <button
+            type="button"
+            onClick={onJoin}
+            className="rounded border border-stone-300 bg-white px-2 py-0.5 font-mono text-[11px] text-stone-600 hover:bg-stone-100 hover:text-stone-800"
+          >
+            Join
+          </button>
+        </Tooltip>
+        <span aria-hidden className="h-2 w-px bg-stone-300" />
+      </div>
+      <div className="w-10" aria-hidden />
+    </div>
   );
 }

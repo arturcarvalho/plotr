@@ -14,12 +14,21 @@ interface Props {
     col: string,
     src?: { layerId: string; aes: Aes },
   ) => void;
+  /** Joined / split flag for the shared Color row. */
+  colorSplit?: boolean;
+  /** Joined → split transition handler for shared mappings. */
+  onSplitColor: () => void;
+  /** Split → joined transition (fill wins) for shared mappings. */
+  onJoinColor: () => void;
 }
 
 export function SharedMappingsPanel({
   mappings,
   onMap,
   onDrop,
+  colorSplit,
+  onSplitColor,
+  onJoinColor,
 }: Props) {
   const asideRef = useRef<HTMLElement>(null);
   const dragging = useDragging();
@@ -54,6 +63,9 @@ export function SharedMappingsPanel({
             sourceId={SHARED_MAPPINGS_KEY}
             onMap={onMap}
             onDrop={onDrop}
+            colorSplit={colorSplit}
+            onSplitColor={onSplitColor}
+            onJoinColor={onJoinColor}
           />
         </div>
       </div>

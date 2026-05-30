@@ -178,6 +178,11 @@ export function resolveDraw(
   if (layer.draw !== AUTO) return layer.draw;
   const xK = columnAxisKind(columns, layer.mappings.x ?? shared?.x);
   const yK = columnAxisKind(columns, layer.mappings.y ?? shared?.y);
-  const fillK = columnAxisKind(columns, layer.mappings.fill ?? shared?.fill);
+  // Color (joined meta-aesthetic) feeds the same auto-resolution path as
+  // fill — a discrete column on Color picks pie just like Fill color does.
+  const fillK = columnAxisKind(
+    columns,
+    layer.mappings.fill ?? layer.mappings.color ?? shared?.fill ?? shared?.color,
+  );
   return defaultDraw(xK, yK, fillK);
 }

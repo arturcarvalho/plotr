@@ -23,6 +23,10 @@ interface Props {
   onToggleMappingSettings: (aes: Aes) => void;
   onOpenSettings: () => void;
   onChangeSettings: (settings: LayerSettings) => void;
+  /** Joined → split transition on the Color row. */
+  onSplitColor: () => void;
+  /** Split → joined transition (fill wins, stroke discarded). */
+  onJoinColor: () => void;
 }
 
 export function ChartPanel({
@@ -34,6 +38,8 @@ export function ChartPanel({
   onToggleMappingSettings,
   onOpenSettings,
   onChangeSettings,
+  onSplitColor,
+  onJoinColor,
 }: Props) {
   const title = resolvedDraw ? chartLabel(resolvedDraw) : "Chart";
   const asideRef = useRef<HTMLElement>(null);
@@ -84,6 +90,9 @@ export function ChartPanel({
             onMap={onMap}
             onDrop={onDrop}
             onToggleSettings={onToggleMappingSettings}
+            colorSplit={layer.settings?.colorSplit}
+            onSplitColor={onSplitColor}
+            onJoinColor={onJoinColor}
           />
           <FilterField
             value={layer.settings?.filter ?? ""}
