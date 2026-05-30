@@ -23,6 +23,9 @@ interface Props {
   onToggleMappingSettings: (aes: Aes) => void;
   onOpenSettings: () => void;
   onChangeSettings: (settings: LayerSettings) => void;
+  /** Append / remove a PARTITION BY column for this layer. */
+  onAddPartition: (col: string) => void;
+  onRemovePartition: (col: string) => void;
   /** Joined → split transition on the Color row. */
   onSplitColor: () => void;
   /** Split → joined transition (fill wins, stroke discarded). */
@@ -38,6 +41,8 @@ export function ChartPanel({
   onToggleMappingSettings,
   onOpenSettings,
   onChangeSettings,
+  onAddPartition,
+  onRemovePartition,
   onSplitColor,
   onJoinColor,
 }: Props) {
@@ -90,6 +95,9 @@ export function ChartPanel({
             onMap={onMap}
             onDrop={onDrop}
             onToggleSettings={onToggleMappingSettings}
+            partition={layer.partition}
+            onAddPartition={onAddPartition}
+            onRemovePartition={onRemovePartition}
             colorSplit={layer.settings?.colorSplit}
             onSplitColor={onSplitColor}
             onJoinColor={onJoinColor}

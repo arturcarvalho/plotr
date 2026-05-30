@@ -881,6 +881,27 @@ export default function App() {
     });
   };
 
+  // Per-layer PARTITION BY columns. Stored on the layer (not its settings) so
+  // they survive a chart-type switch. Adds dedupe; removing the last column
+  // drops the field so the layer / URL hash stays clean.
+  const onAddPartition = (layerId: string, col: string) =>
+    setLayers((ls) =>
+      ls.map((l) => {
+        if (l.id !== layerId) return l;
+        const cur = l.partition ?? [];
+        return cur.includes(col) ? l : { ...l, partition: [...cur, col] };
+      }),
+    );
+
+  const onRemovePartition = (layerId: string, col: string) =>
+    setLayers((ls) =>
+      ls.map((l) => {
+        if (l.id !== layerId || !l.partition) return l;
+        const next = l.partition.filter((c) => c !== col);
+        return { ...l, partition: next.length ? next : undefined };
+      }),
+    );
+
   const onAddLayer = () => {
     const layer = initialLayer();
     setLayers((ls) => [...ls, layer]);
@@ -1196,6 +1217,12 @@ export default function App() {
                     onOpenSettings={toggleSettingsPanel}
                     onChangeSettings={(s) =>
                       onChangeSettings(panelLayer.id, s)
+                    }
+                    onAddPartition={(col) =>
+                      onAddPartition(panelLayer.id, col)
+                    }
+                    onRemovePartition={(col) =>
+                      onRemovePartition(panelLayer.id, col)
                     }
                     onSplitColor={() => onSplitColorLayer(panelLayer.id)}
                     onJoinColor={() => onJoinColorLayer(panelLayer.id)}

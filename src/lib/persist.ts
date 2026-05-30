@@ -95,6 +95,7 @@ interface ShortLayer {
   m: Partial<Record<Aes, string>>;
   s?: ShortLayerSettings;
   x?: true;
+  p?: string[];
 }
 interface ShortLayerSettings {
   w?: number;
@@ -283,6 +284,7 @@ function encodeLayer(l: Layer): ShortLayer {
   const settings = encodeLayerSettings(l.settings);
   if (settings) out.s = settings;
   if (l.disabled === true) out.x = true;
+  if (l.partition && l.partition.length > 0) out.p = l.partition;
   return out;
 }
 
@@ -438,6 +440,10 @@ function decodeLayer(raw: unknown): Layer | null {
   const settings = decodeLayerSettings(r.s);
   if (settings) out.settings = settings;
   if (r.x === true) out.disabled = true;
+  if (Array.isArray(r.p)) {
+    const cols = r.p.filter(isNonEmptyString);
+    if (cols.length > 0) out.partition = cols;
+  }
   return out;
 }
 

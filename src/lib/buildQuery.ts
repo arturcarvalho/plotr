@@ -159,6 +159,12 @@ export interface Layer {
   mappings: Partial<Record<Aes, string>>;
   settings?: LayerSettings;
   disabled?: boolean;
+  /** Columns emitted as `PARTITION BY <col>, …` at the tail of the DRAW clause
+   *  (after FILTER, per ggsql grammar). Groups records beyond the automatic
+   *  grouping discrete aesthetics give — e.g. one line per series without
+   *  colouring by it. Lives on the layer (not `settings`) so it survives a
+   *  chart-type switch like mappings do. */
+  partition?: string[];
 }
 
 export interface Labels {
@@ -299,6 +305,11 @@ const layerFilterClause = (filter: string | undefined): string => {
   const trimmed = filter?.trim();
   return trimmed ? ` FILTER ${trimmed}` : "";
 };
+
+/** Per-grammar, PARTITION BY sits after FILTER on the DRAW clause. Columns are
+ *  comma-joined; empty / absent emits nothing. */
+const layerPartitionClause = (partition: string[] | undefined): string =>
+  partition && partition.length ? ` PARTITION BY ${partition.join(", ")}` : "";
 
 const layerSettingClause = (s: LayerSettings | undefined): string => {
   if (!s) return "";
@@ -454,7 +465,7 @@ export function buildQuery(
       ? ` MAPPING ${dataMaps.join(", ")}`
       : "";
     drawLines.push(
-      `DRAW ${emittedDraw}${mappingClause}${layerSettingClause(l.settings)}${layerFilterClause(l.settings?.filter)}`,
+      `DRAW ${emittedDraw}${mappingClause}${layerSettingClause(l.settings)}${layerFilterClause(l.settings?.filter)}${layerPartitionClause(l.partition)}`,
     );
   });
   drawLines.push(...customsAt(layers.length));

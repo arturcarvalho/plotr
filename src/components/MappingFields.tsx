@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { Aes } from "../lib/buildQuery";
 import { Dropzone } from "./Dropzone";
+import { MultiDropzone } from "./MultiDropzone";
 import { Tooltip } from "./Tooltip";
 
 interface Props {
@@ -20,6 +21,12 @@ interface Props {
     src?: { layerId: string; aes: Aes },
   ) => void;
   onToggleSettings?: (aes: Aes) => void;
+  /** Per-layer PARTITION BY columns + handlers. Only supplied for a chart
+   *  layer (not the shared-mappings panel), so the "Partition" field renders
+   *  only there. */
+  partition?: string[];
+  onAddPartition?: (col: string) => void;
+  onRemovePartition?: (col: string) => void;
   /** Color-row layout flag. When false / undefined → render a single joined
    *  Color row with an embedded Split button. When true → render Fill color +
    *  Line color rows with a Join control between them. */
@@ -43,6 +50,9 @@ export function MappingFields({
   onMap,
   onDrop,
   onToggleSettings,
+  partition,
+  onAddPartition,
+  onRemovePartition,
   colorSplit,
   onSplitColor,
   onJoinColor,
@@ -142,6 +152,24 @@ export function MappingFields({
           {facetRow("facet_col")}
         </div>
       </Field>
+      {onAddPartition && onRemovePartition && (
+        <Field label="Partition">
+          {/* Reserve the chevron-button gutter (w-10 + gap-1) so the dropzone
+              box matches the width of the aesthetic dropzones, which sit beside
+              a settings chevron. */}
+          <div className="flex items-stretch gap-1">
+            <div className="flex-1">
+              <MultiDropzone
+                value={partition ?? []}
+                onAdd={onAddPartition}
+                onRemove={onRemovePartition}
+                placeholder="group by columns"
+              />
+            </div>
+            <div className="w-10 shrink-0" aria-hidden />
+          </div>
+        </Field>
+      )}
     </div>
   );
 }

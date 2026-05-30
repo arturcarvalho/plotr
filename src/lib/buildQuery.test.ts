@@ -2176,3 +2176,89 @@ describe("buildQuery emits SCALE … RENAMING for axis formatters", () => {
     expect(q).toContain("SCALE x RENAMING * => '{:num %.2f}'");
   });
 });
+
+describe("buildQuery emits per-layer PARTITION BY", () => {
+  it("emits PARTITION BY at the END of the DRAW line, comma-joined", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "born_at", y: "bill_len" },
+          partition: ["species", "island"],
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW line MAPPING born_at AS x, bill_len AS y PARTITION BY species, island",
+    );
+  });
+
+  it("PARTITION BY comes after FILTER per ggsql grammar order", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "born_at", y: "bill_len" },
+          settings: { filter: "body_mass > 4000" },
+          partition: ["species"],
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW line MAPPING born_at AS x, bill_len AS y FILTER body_mass > 4000 PARTITION BY species",
+    );
+  });
+
+  it("emits nothing when partition is empty or absent", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+          partition: [],
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).not.toContain("PARTITION BY");
+  });
+
+  it("each layer carries its own PARTITION BY independently", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "L1",
+          draw: "line",
+          mappings: { x: "born_at", y: "bill_len" },
+          partition: ["species"],
+        },
+        {
+          id: "L2",
+          draw: "point",
+          mappings: { x: "bill_len", y: "bill_dep" },
+        },
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain(
+      "DRAW line MAPPING born_at AS x, bill_len AS y PARTITION BY species",
+    );
+    expect(q).toContain("DRAW point MAPPING bill_len AS x, bill_dep AS y");
+    expect(q).not.toContain(
+      "DRAW point MAPPING bill_len AS x, bill_dep AS y PARTITION BY",
+    );
+  });
+});

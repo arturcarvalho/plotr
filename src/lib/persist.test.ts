@@ -1256,3 +1256,49 @@ describe("secondaryPanel persistence", () => {
     expect(back?.secondaryPanel).toBeUndefined();
   });
 });
+
+describe("layer partition (PARTITION BY) persistence", () => {
+  it("round-trips a layer's partition columns", async () => {
+    const state: Persisted = {
+      ...empty,
+      layers: [
+        {
+          id: "L1",
+          draw: "line",
+          mappings: { x: "born_at", y: "bill_len" },
+          partition: ["species", "island"],
+        } satisfies Layer,
+      ],
+    };
+    const got = await deserialize(await serialize(state));
+    expect(got?.layers[0].partition).toEqual(["species", "island"]);
+  });
+
+  it("a layer with no partition omits the field after decode", async () => {
+    const state: Persisted = {
+      ...empty,
+      layers: [
+        { id: "L1", draw: "point", mappings: { x: "a" } } satisfies Layer,
+      ],
+    };
+    const got = await deserialize(await serialize(state));
+    expect(got?.layers[0].partition).toBeUndefined();
+  });
+
+  it("drops a non-array partition value", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "point", m: { x: "a" }, p: "species" }],
+    });
+    expect((await deserialize(payload))?.layers[0].partition).toBeUndefined();
+  });
+
+  it("drops empty / non-string entries, keeping valid columns", async () => {
+    const payload = await wrap({
+      L: [{ i: "L1", d: "line", m: { x: "a" }, p: ["species", "", 7, "island"] }],
+    });
+    expect((await deserialize(payload))?.layers[0].partition).toEqual([
+      "species",
+      "island",
+    ]);
+  });
+});
