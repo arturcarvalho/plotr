@@ -66,11 +66,6 @@ const initialLayer = (): Layer => ({
   mappings: {},
 });
 
-const initialLabels = (position: number): LabelsLayer => ({
-  id: newId(),
-  position,
-});
-
 const initialCustom = (position: number): CustomLayer => ({
   id: newId(),
   ggsql: "",
@@ -91,7 +86,7 @@ export default function App() {
     Record<string, ColumnKind>
   >({});
   const [layers, setLayers] = useState<Layer[]>(() => [initialLayer()]);
-  const [labels, setLabels] = useState<LabelsLayer[]>(() => [initialLabels(1)]);
+  const [labels, setLabels] = useState<LabelsLayer[]>(() => []);
   const [customLayers, setCustomLayers] = useState<CustomLayer[]>([]);
   const [project, setProject] = useState<ProjectSettings>({});
   const [sharedMappings, setSharedMappings] = useState<
@@ -305,7 +300,7 @@ export default function App() {
       if (gen !== popGenRef.current) return; // a newer popstate already landed
       if (!data) return;
       setLayers(data.layers.length > 0 ? data.layers : [initialLayer()]);
-      setLabels(data.labels.length > 0 ? data.labels : [initialLabels(1)]);
+      setLabels(data.labels);
       setCustomLayers(data.customLayers ?? []);
       setProject(data.project);
       setSharedMappings(data.sharedMappings);
