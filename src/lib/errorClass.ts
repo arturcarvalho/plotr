@@ -44,3 +44,18 @@ export const CHART_ERROR_PREFIX = "Chart error:";
 export function isChartError(msg: string): boolean {
   return msg.startsWith(CHART_ERROR_PREFIX);
 }
+
+/** A hard ggsql-wasm crash: the wasm linear memory is corrupted (heap OOB,
+ *  a Rust `unreachable` panic, or a raw wasm `RuntimeError`). ggsql-wasm v0.3.1
+ *  throws these under rapid / multi-layer `execute()` calls. Unlike a chart
+ *  validation error, the user can't fix it by editing the chart — only a full
+ *  page reload rebuilds a clean runtime, so the chart pane warns and offers a
+ *  "Reload page" action instead of silently resetting. */
+export function isWasmCrashError(e: unknown): boolean {
+  const msg = String(e);
+  return (
+    msg.includes("memory access out of bounds") ||
+    msg.includes("unreachable") ||
+    (e instanceof Error && e.constructor.name === "RuntimeError")
+  );
+}

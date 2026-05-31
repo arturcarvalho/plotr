@@ -32,7 +32,11 @@ import {
 import { clearLastCsv, loadLastCsv, saveLastCsv } from "./lib/csvStore";
 import { normalizeCsvHeader } from "./lib/csvNormalize";
 import { countConfiguredVariables } from "./lib/configSummary";
-import { isChartError, isUnrecoverableError } from "./lib/errorClass";
+import {
+  isChartError,
+  isUnrecoverableError,
+  isWasmCrashError,
+} from "./lib/errorClass";
 import { BuildPanel } from "./components/BuildPanel";
 import { ChartPanel } from "./components/ChartPanel";
 import { ChartTypePanel } from "./components/ChartTypePanel";
@@ -121,13 +125,6 @@ export default function App() {
   // actively changing inputs the timer keeps resetting, so no renders fire
   // until they pause. Closure captures the latest `query` value at fire time.
   const pendingRenderRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ggsql-wasm v0.3.1 occasionally throws RuntimeError (memory access OOB /
-  // unreachable / etc.) under rapid execute() calls, especially with multi-
-  // layer queries. wasm-bindgen's init() can't cleanly reset the wasm linear
-  // memory in-place, so true recovery requires a page reload. We try
-  // reinitialize() once as a best effort; on second crash we tell the user.
-  const wasmRecoveryAttemptedRef = useRef(false);
 
   // Hydrate from URL hash on mount, then auto-open the first layer's panel.
   useEffect(() => {
@@ -340,8 +337,16 @@ export default function App() {
       if (cancelled) return;
       const fromHash = pendingActiveTableRef.current;
       pendingActiveTableRef.current = null;
-      const next = fromHash ?? lastCsv?.name ?? null;
-      if (next) setActiveTable(next);
+      // Only select a table ggsql actually has registered (built-ins + the
+      // just-re-registered CSV). Otherwise the name would be a phantom — the
+      // sidebar shows it "selected" but every `SELECT * FROM <name>` throws
+      // "no such table" (CSV missing from this browser's IndexedDB, a shared /
+      // old URL, or the re-register failed on load). Leaving it null surfaces
+      // the "No data selected — drop a CSV" card instead.
+      const candidate = fromHash ?? lastCsv?.name ?? null;
+      const next =
+        candidate && ggsql.listTables().includes(candidate) ? candidate : null;
+      setActiveTable(next);
     })();
     return () => {
       cancelled = true;
@@ -477,7 +482,7 @@ export default function App() {
       setVegaSpec(null);
       // Nothing to render → any recoverable "Chart error:" is stale (it was
       // tied to an earlier query). Drop those, but keep unrecoverable wasm-
-      // crash messages, which only a successful render / re-init clears.
+      // crash messages, which only a successful render (after a reload) clears.
       setErrors((prev) =>
         prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
       );
@@ -590,14 +595,12 @@ export default function App() {
           setWarnings(collected);
           // Successful render clears any displayed chart errors and
           // unrecoverable messages — both are by definition stale once we've
-          // drawn a frame against the (possibly re-initialised) wasm.
+          // drawn a frame (e.g. after the user reloaded past a wasm crash).
           setErrors((prev) =>
             prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
           );
           // Expose the just-rendered Vega-Lite spec to the bottom-pane tab.
           setVegaSpec(spec);
-          // Future crashes get a fresh recovery attempt.
-          wasmRecoveryAttemptedRef.current = false;
         }
       } catch (e) {
         if (cancelled) return;
@@ -607,58 +610,22 @@ export default function App() {
         setVegaSpec(null);
         // Drop the stale chart so the in-place error display takes its place.
         if (vizRef.current) vizRef.current.innerHTML = "";
-        const msg = String(e);
-        // ggsql-wasm v0.3.1 crashes in several distinct ways under rapid /
-        // multi-layer execute() calls: OOB heap overrun, Rust panic via
-        // `unreachable`, etc. All corrupt the runtime state.
-        const isWasmCrash =
-          msg.includes("memory access out of bounds") ||
-          msg.includes("unreachable") ||
-          (e instanceof Error && e.constructor.name === "RuntimeError");
-        const reloadHint =
-          "Please reload the page (Cmd/Ctrl+R) — your settings are preserved in the URL hash.";
-        if (isWasmCrash && !wasmRecoveryAttemptedRef.current) {
-          // First crash this session — best-effort recovery. wasm-bindgen
-          // can't truly reset the wasm memory in-place, so this may itself
-          // fail, but it works often enough to be worth trying once.
-          //
-          // Stash the current activeTable into the pending ref AND blank it.
-          // Otherwise the columns useEffect would re-fire right after
-          // setReady(true) and race the async rehydration: it'd call
-          // describeColumns() on the fresh wasm context (only builtins
-          // registered) and produce a spurious "no such table" error before
-          // our IndexedDB rehydration registered the user's CSV.
-          wasmRecoveryAttemptedRef.current = true;
-          if (activeTable) {
-            pendingActiveTableRef.current = activeTable;
-            setActiveTable(null);
-          }
-          setReady(false);
-          try {
-            await ggsql.reinitialize();
-            setReady(true);
-          } catch (initErr) {
-            setErrors((prev) => [
-              `ggsql-wasm crashed and re-init failed: ${String(initErr)}. ${reloadHint}`,
-              ...prev.filter(
-                (m) => !isUnrecoverableError(m) && !isChartError(m),
-              ),
-            ]);
-          }
-          return;
-        }
-        if (isWasmCrash) {
-          // Second crash — recovery already attempted. Tell the user.
+        if (isWasmCrashError(e)) {
+          // A wasm crash corrupts the runtime's linear memory. wasm-bindgen
+          // can't reset it in place — rebuilding it in-app leaves table
+          // selection broken — so the only reliable recovery is a full page
+          // reload, which restores everything (settings from the URL hash, the
+          // CSV from IndexedDB). Warn and let the user reload rather than
+          // silently resetting. The "ggsql-wasm crashed" prefix marks this
+          // unrecoverable, so the chart pane shows a "Reload page" action.
           setErrors((prev) => [
-            `ggsql-wasm crashed again after re-init. ${reloadHint}`,
-            ...prev.filter(
-              (m) => !isUnrecoverableError(m) && !isChartError(m),
-            ),
+            "ggsql-wasm crashed. Reload the page to recover — your chart settings and data are preserved.",
+            ...prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
           ]);
           return;
         }
         setErrors((prev) => [
-          `Chart error: ${msg}`,
+          `Chart error: ${String(e)}`,
           ...prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
         ]);
       }

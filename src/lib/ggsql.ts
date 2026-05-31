@@ -32,14 +32,13 @@ class GgsqlManager {
     return this.initPromise;
   }
 
-  /** Tear the wasm runtime down and rebuild it from scratch. Used by the
-   *  chart-render recovery path: after a wasm crash (OOB / unreachable Rust
-   *  panic) the runtime state is corrupted and a plain `initialize()` would
-   *  just return the cached resolved promise. We call `__plotr_reset()` —
-   *  a patched export on `ggsql_wasm.js` (see MANUAL.md bumping section) —
-   *  to clear the bindgen module's private `wasm`/`wasmModule` refs, then
-   *  re-run `init(...)` which re-fetches and re-instantiates the wasm bytes.
-   *  The next `new GgsqlContext()` allocates in the fresh wasm memory. */
+  /** Tear the wasm runtime down and rebuild it from scratch. A plain
+   *  `initialize()` would short-circuit on the cached resolved promise, so we
+   *  null the context + promise and call `__plotr_reset()` — a patched export
+   *  on `ggsql_wasm.js` (see MANUAL.md bumping section) — to clear the bindgen
+   *  module's private `wasm`/`wasmModule` refs, then re-run `init(...)` to
+   *  re-fetch and re-instantiate the wasm bytes. The next `new GgsqlContext()`
+   *  then allocates in clean wasm memory. */
   async reinitialize(): Promise<void> {
     this.context = null;
     this.initPromise = null;

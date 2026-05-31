@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isChartError, isUnrecoverableError } from "./errorClass";
+import {
+  isChartError,
+  isUnrecoverableError,
+  isWasmCrashError,
+} from "./errorClass";
 
 describe("isUnrecoverableError", () => {
   it("matches bare 'Chart error:' exactly", () => {
@@ -53,6 +57,41 @@ describe("isUnrecoverableError", () => {
     // isUnrecoverableError stays narrowly scoped to the bare-sentinel form
     // and "ggsql-wasm crashed" prefix.
     expect(isUnrecoverableError("Chart error: bad mapping")).toBe(false);
+  });
+});
+
+describe("isWasmCrashError", () => {
+  it("matches an OOB heap-overrun message", () => {
+    expect(
+      isWasmCrashError(
+        new Error("RuntimeError: memory access out of bounds"),
+      ),
+    ).toBe(true);
+    expect(isWasmCrashError("memory access out of bounds")).toBe(true);
+  });
+
+  it("matches an `unreachable` Rust-panic message", () => {
+    expect(isWasmCrashError(new Error("unreachable executed"))).toBe(true);
+    expect(isWasmCrashError("unreachable")).toBe(true);
+  });
+
+  it("matches a raw wasm RuntimeError by constructor name", () => {
+    class RuntimeError extends Error {}
+    // Body carries none of the substrings — the constructor name is the signal.
+    expect(isWasmCrashError(new RuntimeError("boom"))).toBe(true);
+  });
+
+  it("does NOT match ordinary ggsql validation / data errors", () => {
+    expect(
+      isWasmCrashError(
+        new Error(
+          `ValidationError("Layer 1: aesthetic 'y' references non-existent column")`,
+        ),
+      ),
+    ).toBe(false);
+    expect(isWasmCrashError("no such table: pat_lab_users")).toBe(false);
+    expect(isWasmCrashError("Failed to inspect 'foo': bar")).toBe(false);
+    expect(isWasmCrashError("")).toBe(false);
   });
 });
 
