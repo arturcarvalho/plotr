@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { LabelsLayer } from "../lib/buildQuery";
 import { crossesBoundary, useDragging } from "../lib/dragHelpers";
+import { ClearButton } from "./ClearButton";
 import { DeleteBanner } from "./DeleteBanner";
 
 type LabelsPatch = Partial<
@@ -76,8 +77,9 @@ function Input({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block font-mono text-xs font-semibold text-stone-700">
-        {label}
+      <span className="mb-1 flex items-center justify-between font-mono text-xs font-semibold text-stone-700">
+        <span>{label}</span>
+        {value.trim() && <ClearButton onClick={() => onChange("")} />}
       </span>
       <input
         type="text"

@@ -61,5 +61,10 @@ export function useDebouncedInput(
     onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter") commit(local);
     },
+    // Clear immediately (cancels any pending debounce and pushes "" upstream).
+    clear: () => {
+      setLocal("");
+      commit("");
+    },
   };
 }

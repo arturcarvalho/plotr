@@ -15,6 +15,7 @@ import Select, {
   type StylesConfig,
 } from "react-select";
 import type { Aes, LayerSettings, ScaleSettings } from "../lib/buildQuery";
+import { ClearButton } from "./ClearButton";
 import { useDebouncedInput } from "../lib/useDebouncedInput";
 import {
   CONTINUOUS_PALETTES,
@@ -572,7 +573,11 @@ function FixedTab({
         checked={noValue}
         onChange={setNo}
       />
-      {(value !== null || noValue) && <ClearButton onClick={clearAll} />}
+      {(value !== null || noValue) && (
+        <div className="flex justify-end">
+          <ClearButton onClick={clearAll} />
+        </div>
+      )}
     </div>
   );
 }
@@ -628,7 +633,11 @@ function DiscreteTab({
         kind="discrete"
       />
       <DiscreteSelect value={value} onChange={onChange} />
-      {value !== null && <ClearButton onClick={() => onChange(null)} />}
+      {value !== null && (
+        <div className="flex justify-end">
+          <ClearButton onClick={() => onChange(null)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -681,7 +690,11 @@ function ContinuousTab({
         kind="continuous"
       />
       <ContinuousSelect value={value} onChange={onChange} />
-      {value !== null && <ClearButton onClick={() => onChange(null)} />}
+      {value !== null && (
+        <div className="flex justify-end">
+          <ClearButton onClick={() => onChange(null)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -721,17 +734,6 @@ function ContinuousSelect({
 // Shared sub-components
 // ────────────────────────────────────────────────────────────────────────────
 
-function ClearButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded border border-stone-300 bg-white px-2 py-1 font-mono text-[11px] text-stone-600 hover:bg-stone-100"
-    >
-      Clear
-    </button>
-  );
-}
 
 function ToggleField({
   label,
@@ -820,14 +822,7 @@ function NumberSlider({
           className="flex-1"
         />
         {value !== null && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(null)} />
         )}
       </div>
     </label>
@@ -872,9 +867,7 @@ function AxisBreaksField({
       <label className="block">
         <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
           <span>Breaks ({aes})</span>
-          <span className="text-[10px] text-stone-500">
-            {input.value.trim() ? "set" : "off"}
-          </span>
+          {input.value.trim() && <ClearButton onClick={input.clear} />}
         </span>
         <input
           type="text"
@@ -916,9 +909,7 @@ function AxisFormatField({
       <label className="block">
         <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
           <span>Format ({aes})</span>
-          <span className="text-[10px] text-stone-500">
-            {input.value.trim() ? "set" : "off"}
-          </span>
+          {input.value.trim() && <ClearButton onClick={input.clear} />}
         </span>
         <input
           type="text"

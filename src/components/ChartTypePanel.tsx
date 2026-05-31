@@ -29,6 +29,7 @@ import {
 } from "../lib/buildQuery";
 import { drawRequirements } from "../lib/autoChart";
 import { ChartIcon } from "./ChartIcon";
+import { ClearButton } from "./ClearButton";
 
 interface Props {
   resolvedDraw: string | null;
@@ -753,14 +754,7 @@ function PreviewSelectField<T extends string>({
             </span>
           ) : null
         ) : (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(null)} />
         )}
       </div>
       <PreviewContext.Provider value={previewBag}>
@@ -828,14 +822,7 @@ function NumberSliderField({
           className="flex-1"
         />
         {value !== null && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(null)} />
         )}
       </div>
     </label>
@@ -870,14 +857,7 @@ function OffsetField({
       <div className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
         <span>Offset</span>
         {value !== null ? (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(null)} />
         ) : (
           <span className="text-[10px] text-stone-500">default (none)</span>
         )}
@@ -956,14 +936,7 @@ function NumberInputField({
           className="flex-1 rounded border border-stone-300 px-2 py-0.5 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
         />
         {value !== null && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(null)} />
         )}
       </div>
     </div>
@@ -1009,14 +982,7 @@ function TextInputField({
           className="flex-1 rounded border border-stone-300 px-2 py-0.5 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
         />
         {value !== null && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(null)} />
         )}
       </div>
     </div>
@@ -1048,14 +1014,7 @@ function RadioField<T extends string>({
             </span>
           ) : null
         ) : (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(null)} />
         )}
       </legend>
       <div className="flex flex-wrap gap-1">
@@ -1106,14 +1065,7 @@ function AnchorGrid({
       <div className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
         <span>Anchor</span>
         {isSet ? (
-          <button
-            type="button"
-            onClick={() => onChange(undefined, undefined)}
-            className="rounded px-1 font-mono text-[10px] text-stone-500 hover:bg-stone-100 hover:text-stone-700"
-            title="Reset to default"
-          >
-            ×
-          </button>
+          <ClearButton onClick={() => onChange(undefined, undefined)} />
         ) : (
           <span className="text-[10px] text-stone-500">
             default (centre, middle)

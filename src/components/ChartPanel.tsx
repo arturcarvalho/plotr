@@ -8,6 +8,7 @@ import {
 } from "../lib/buildQuery";
 import { crossesBoundary, useDragging } from "../lib/dragHelpers";
 import { useDebouncedInput } from "../lib/useDebouncedInput";
+import { ClearButton } from "./ClearButton";
 import { DeleteBanner } from "./DeleteBanner";
 import { MappingFields } from "./MappingFields";
 
@@ -126,9 +127,7 @@ function FilterField({
       <label className="block">
         <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
           <span>Filter</span>
-          <span className="text-[10px] text-stone-500">
-            {input.value.trim() ? "set" : "off"}
-          </span>
+          {input.value.trim() && <ClearButton onClick={input.clear} />}
         </span>
         <input
           type="text"
