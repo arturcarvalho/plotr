@@ -142,6 +142,10 @@ interface ShortScales {
   fpc?: string;
   kpd?: string;
   kpc?: string;
+  fpdr?: true;
+  fpcr?: true;
+  kpdr?: true;
+  kpcr?: true;
 }
 interface ShortLabels {
   i: string;
@@ -264,6 +268,10 @@ function encodeScales(s: ScaleSettings): ShortScales {
     out.kpd = s.strokePaletteDiscrete;
   if (isNonEmptyString(s.strokePaletteContinuous))
     out.kpc = s.strokePaletteContinuous;
+  if (s.fillPaletteDiscreteReverse === true) out.fpdr = true;
+  if (s.fillPaletteContinuousReverse === true) out.fpcr = true;
+  if (s.strokePaletteDiscreteReverse === true) out.kpdr = true;
+  if (s.strokePaletteContinuousReverse === true) out.kpcr = true;
   return out;
 }
 
@@ -282,6 +290,10 @@ function decodeScales(raw: unknown): ScaleSettings {
   if (typeof r.fpc === "string") out.fillPaletteContinuous = r.fpc;
   if (typeof r.kpd === "string") out.strokePaletteDiscrete = r.kpd;
   if (typeof r.kpc === "string") out.strokePaletteContinuous = r.kpc;
+  if (r.fpdr === true) out.fillPaletteDiscreteReverse = true;
+  if (r.fpcr === true) out.fillPaletteContinuousReverse = true;
+  if (r.kpdr === true) out.strokePaletteDiscreteReverse = true;
+  if (r.kpcr === true) out.strokePaletteContinuousReverse = true;
   return out;
 }
 

@@ -1340,6 +1340,52 @@ describe("buildQuery emits SCALE for palettes (chart-level scales)", () => {
       out!.split("\n").filter((l) => l.startsWith("SCALE fill")),
     ).toHaveLength(1);
   });
+
+  it("discrete palette + reverse → SCALE fill TO <palette> SETTING reverse => true", () => {
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "species" })], {
+      fillPaletteDiscrete: "set1",
+      fillPaletteDiscreteReverse: true,
+    });
+    expect(out).toContain("SCALE fill TO set1 SETTING reverse => true");
+  });
+
+  it("continuous palette + reverse → SCALE fill TO <palette> SETTING reverse => true", () => {
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "bill_dep" })], {
+      fillPaletteContinuous: "viridis",
+      fillPaletteContinuousReverse: true,
+    });
+    expect(out).toContain("SCALE fill TO viridis SETTING reverse => true");
+  });
+
+  it("reverse without a palette → bare SCALE fill SETTING reverse => true", () => {
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "species" })], {
+      fillPaletteDiscreteReverse: true,
+    });
+    expect(out).toContain("SCALE fill SETTING reverse => true");
+    expect(out).not.toContain("SCALE fill TO");
+  });
+
+  it("stroke palette + reverse → SCALE stroke TO <palette> SETTING reverse => true", () => {
+    const out = q(
+      [
+        {
+          id: "L",
+          draw: "line",
+          mappings: { x: "bill_len", y: "bill_dep", stroke: "species" },
+        },
+      ],
+      { strokePaletteDiscrete: "tableau10", strokePaletteDiscreteReverse: true },
+    );
+    expect(out).toContain("SCALE stroke TO tableau10 SETTING reverse => true");
+  });
+
+  it("palette without reverse omits the SETTING clause", () => {
+    const out = q([point({ x: "bill_len", y: "bill_dep", fill: "species" })], {
+      fillPaletteDiscrete: "set1",
+    });
+    expect(out).toContain("SCALE fill TO set1");
+    expect(out).not.toContain("reverse");
+  });
 });
 
 describe("buildQuery emits PROJECT clause", () => {

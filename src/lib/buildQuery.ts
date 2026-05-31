@@ -140,6 +140,13 @@ export interface ScaleSettings {
   fillPaletteContinuous?: string;
   strokePaletteDiscrete?: string;
   strokePaletteContinuous?: string;
+  /** Reverse the scale direction → folds `SETTING reverse => true` onto the
+   *  matching `SCALE fill|stroke` clause (works on the default palette too,
+   *  emitting a bare `SCALE fill SETTING reverse => true`). Per palette kind. */
+  fillPaletteDiscreteReverse?: boolean;
+  fillPaletteContinuousReverse?: boolean;
+  strokePaletteDiscreteReverse?: boolean;
+  strokePaletteContinuousReverse?: boolean;
 }
 
 export interface Layer {
@@ -346,17 +353,30 @@ function scaleClausesFor(
   aes: "fill" | "stroke",
   scales: ScaleSettings | undefined,
 ): string[] {
-  const discrete =
-    aes === "fill"
-      ? scales?.fillPaletteDiscrete
-      : scales?.strokePaletteDiscrete;
-  const continuous =
-    aes === "fill"
-      ? scales?.fillPaletteContinuous
-      : scales?.strokePaletteContinuous;
   const out: string[] = [];
-  if (discrete) out.push(`SCALE ${aes} TO ${discrete}`);
-  if (continuous) out.push(`SCALE ${aes} TO ${continuous}`);
+  for (const kind of ["discrete", "continuous"] as const) {
+    const palette =
+      kind === "discrete"
+        ? aes === "fill"
+          ? scales?.fillPaletteDiscrete
+          : scales?.strokePaletteDiscrete
+        : aes === "fill"
+          ? scales?.fillPaletteContinuous
+          : scales?.strokePaletteContinuous;
+    const reverse =
+      kind === "discrete"
+        ? aes === "fill"
+          ? scales?.fillPaletteDiscreteReverse
+          : scales?.strokePaletteDiscreteReverse
+        : aes === "fill"
+          ? scales?.fillPaletteContinuousReverse
+          : scales?.strokePaletteContinuousReverse;
+    if (!palette && !reverse) continue;
+    let clause = `SCALE ${aes}`;
+    if (palette) clause += ` TO ${palette}`;
+    if (reverse) clause += ` SETTING reverse => true`;
+    out.push(clause);
+  }
   return out;
 }
 

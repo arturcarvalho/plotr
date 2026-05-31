@@ -154,6 +154,30 @@ describe("serialize / deserialize round-trip", () => {
     });
   });
 
+  it("palette reverse flags round-trip", async () => {
+    const s = await serialize({
+      layers: [{ id: "L", draw: "point", mappings: { x: "a", y: "b" } }],
+      labels: [],
+      project: {},
+      scales: {
+        fillPaletteDiscrete: "set1",
+        fillPaletteDiscreteReverse: true,
+        fillPaletteContinuousReverse: true,
+        strokePaletteDiscreteReverse: true,
+        strokePaletteContinuousReverse: true,
+      },
+      sharedMappings: {},
+      activeTable: null,
+    });
+    expect((await deserialize(s))?.scales).toEqual({
+      fillPaletteDiscrete: "set1",
+      fillPaletteDiscreteReverse: true,
+      fillPaletteContinuousReverse: true,
+      strokePaletteDiscreteReverse: true,
+      strokePaletteContinuousReverse: true,
+    });
+  });
+
   it("rule slope round-trips", async () => {
     const s = await serialize({
       layers: [

@@ -275,9 +275,17 @@ export function MappingPanel({
       aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
     const continuousKey =
       aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
+    const discreteRevKey =
+      aes === "fill"
+        ? "fillPaletteDiscreteReverse"
+        : "strokePaletteDiscreteReverse";
+    const continuousRevKey =
+      aes === "fill"
+        ? "fillPaletteContinuousReverse"
+        : "strokePaletteContinuousReverse";
     fixedSet = !!settings[fixedKey] || !!settings[noKey];
-    discreteSet = !!scales[discreteKey];
-    continuousSet = !!scales[continuousKey];
+    discreteSet = !!scales[discreteKey] || !!scales[discreteRevKey];
+    continuousSet = !!scales[continuousKey] || !!scales[continuousRevKey];
   }
 
   return (
@@ -408,6 +416,14 @@ function ColorAestheticPanel({
     aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
   const continuousKey =
     aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
+  const discreteRevKey =
+    aes === "fill"
+      ? "fillPaletteDiscreteReverse"
+      : "strokePaletteDiscreteReverse";
+  const continuousRevKey =
+    aes === "fill"
+      ? "fillPaletteContinuousReverse"
+      : "strokePaletteContinuousReverse";
 
   return (
     <div className="flex flex-col">
@@ -424,6 +440,10 @@ function ColorAestheticPanel({
           onChange={(v) =>
             onChangeScales({ ...scales, [discreteKey]: v ?? undefined })
           }
+          reverse={scales[discreteRevKey] ?? false}
+          onToggleReverse={(v) =>
+            onChangeScales({ ...scales, [discreteRevKey]: v || undefined })
+          }
         />
       )}
       {tab === "continuous" && (
@@ -431,6 +451,10 @@ function ColorAestheticPanel({
           value={scales[continuousKey] ?? null}
           onChange={(v) =>
             onChangeScales({ ...scales, [continuousKey]: v ?? undefined })
+          }
+          reverse={scales[continuousRevKey] ?? false}
+          onToggleReverse={(v) =>
+            onChangeScales({ ...scales, [continuousRevKey]: v || undefined })
           }
         />
       )}
@@ -589,20 +613,34 @@ function PaletteStatusLine({
   value,
   defaultName,
   kind,
+  reverse,
 }: {
   value: string | null;
   defaultName: string;
   kind: "discrete" | "continuous";
+  reverse: boolean;
 }) {
   const effective = value ?? defaultName;
   const isDefault = value === null;
   let swatchCss = "transparent";
   if (kind === "discrete") {
     const p = DISCRETE_PALETTES.find((pp) => pp.name === effective);
-    if (p) swatchCss = discreteStripCss(p.colors);
+    if (p) {
+      const colors = reverse ? [...p.colors].reverse() : p.colors;
+      swatchCss = discreteStripCss(colors);
+    }
   } else {
     const p = CONTINUOUS_PALETTES.find((pp) => pp.name === effective);
-    if (p) swatchCss = gradientCss(p.stops);
+    if (p) {
+      // Reverse direction: keep the ascending offsets, swap the colour order.
+      const stops = reverse
+        ? p.stops.map((s, i) => ({
+            offset: s.offset,
+            color: p.stops[p.stops.length - 1 - i].color,
+          }))
+        : p.stops;
+      swatchCss = gradientCss(stops);
+    }
   }
   return (
     <div className="space-y-1">
@@ -618,9 +656,13 @@ function PaletteStatusLine({
 function DiscreteTab({
   value,
   onChange,
+  reverse,
+  onToggleReverse,
 }: {
   value: string | null;
   onChange: (v: string | null) => void;
+  reverse: boolean;
+  onToggleReverse: (v: boolean) => void;
 }) {
   return (
     <div className="space-y-3 p-3">
@@ -631,11 +673,18 @@ function DiscreteTab({
         value={value}
         defaultName={DEFAULT_DISCRETE}
         kind="discrete"
+        reverse={reverse}
       />
       <DiscreteSelect value={value} onChange={onChange} />
-      {value !== null && (
+      <ToggleField label="Reverse" checked={reverse} onChange={onToggleReverse} />
+      {(value !== null || reverse) && (
         <div className="flex justify-end">
-          <ClearButton onClick={() => onChange(null)} />
+          <ClearButton
+            onClick={() => {
+              onChange(null);
+              onToggleReverse(false);
+            }}
+          />
         </div>
       )}
     </div>
@@ -675,9 +724,13 @@ function DiscreteSelect({
 function ContinuousTab({
   value,
   onChange,
+  reverse,
+  onToggleReverse,
 }: {
   value: string | null;
   onChange: (v: string | null) => void;
+  reverse: boolean;
+  onToggleReverse: (v: boolean) => void;
 }) {
   return (
     <div className="space-y-3 p-3">
@@ -688,11 +741,18 @@ function ContinuousTab({
         value={value}
         defaultName={DEFAULT_CONTINUOUS}
         kind="continuous"
+        reverse={reverse}
       />
       <ContinuousSelect value={value} onChange={onChange} />
-      {value !== null && (
+      <ToggleField label="Reverse" checked={reverse} onChange={onToggleReverse} />
+      {(value !== null || reverse) && (
         <div className="flex justify-end">
-          <ClearButton onClick={() => onChange(null)} />
+          <ClearButton
+            onClick={() => {
+              onChange(null);
+              onToggleReverse(false);
+            }}
+          />
         </div>
       )}
     </div>
