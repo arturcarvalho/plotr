@@ -145,7 +145,7 @@ export function AddLayerModal({ onClose, onConfirm }: Props) {
                 role="radio"
                 aria-checked={isSelected}
                 data-kind={o.kind}
-                onClick={() => setSelected(o.kind)}
+                onClick={() => onConfirm(o.kind)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
