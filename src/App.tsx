@@ -487,6 +487,12 @@ export default function App() {
     if (!query) {
       vizRef.current.innerHTML = "";
       setVegaSpec(null);
+      // Nothing to render → any recoverable "Chart error:" is stale (it was
+      // tied to an earlier query). Drop those, but keep unrecoverable wasm-
+      // crash messages, which only a successful render / re-init clears.
+      setErrors((prev) =>
+        prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
+      );
       return;
     }
 
@@ -496,7 +502,14 @@ export default function App() {
       try {
         if (!ggsql.hasVisual(query)) {
           if (vizRef.current) vizRef.current.innerHTML = "";
-          if (!cancelled) setVegaSpec(null);
+          if (!cancelled) {
+            setVegaSpec(null);
+            // The query parsed (hasVisual didn't throw) but has no visual to
+            // draw — clear stale recoverable chart errors, same as above.
+            setErrors((prev) =>
+              prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
+            );
+          }
           return;
         }
         const spec = JSON.parse(ggsql.execute(query));
