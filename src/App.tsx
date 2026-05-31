@@ -129,18 +129,6 @@ export default function App() {
   // reinitialize() once as a best effort; on second crash we tell the user.
   const wasmRecoveryAttemptedRef = useRef(false);
 
-  // Auto-switch the bottom pane to Problems whenever the errors list grows.
-  // Warnings don't trigger the switch — they're surfaced via the amber badge
-  // on the tab and are usually not actionable. Tracks the previous length so
-  // it only fires on a new error, not on unrelated re-renders or on clears.
-  const prevErrorCountRef = useRef(errors.length);
-  useEffect(() => {
-    if (errors.length > prevErrorCountRef.current) {
-      setBottomTab("problems");
-    }
-    prevErrorCountRef.current = errors.length;
-  }, [errors.length]);
-
   // Hydrate from URL hash on mount, then auto-open the first layer's panel.
   useEffect(() => {
     let cancelled = false;
@@ -617,6 +605,8 @@ export default function App() {
         // displayed spec back to the placeholder rather than leaving it
         // looking like the current chart.
         setVegaSpec(null);
+        // Drop the stale chart so the in-place error display takes its place.
+        if (vizRef.current) vizRef.current.innerHTML = "";
         const msg = String(e);
         // ggsql-wasm v0.3.1 crashes in several distinct ways under rapid /
         // multi-layer execute() calls: OOB heap overrun, Rust panic via
@@ -1014,6 +1004,11 @@ export default function App() {
   // ref so it auto-clears the moment the next successful render filters
   // those messages out.
   const wasmUnrecoverable = errors.some(isUnrecoverableError);
+  // Error text shown in place of the chart. Strip the "Chart error:" prefix
+  // since the in-place display already carries that heading.
+  const chartErrorText = errors
+    .map((m) => m.replace(/^Chart error:\s*/, ""))
+    .join("\n");
 
   // Resolve which panel goes in the slot ----------------------------------
   const panelLayerId =
@@ -1198,8 +1193,8 @@ export default function App() {
                   <Viz
                     ref={vizRef}
                     hasError={errors.length > 0}
+                    errorText={chartErrorText}
                     unrecoverable={wasmUnrecoverable}
-                    onShowProblems={() => setBottomTab("problems")}
                     onReload={() => window.location.reload()}
                   />
                 </div>
