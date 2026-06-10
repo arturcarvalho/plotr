@@ -24,7 +24,7 @@ export const UNIVERSAL_AESTHETICS = [
 // for any other geom. They persist across geom switches so the value isn't
 // lost when the user temporarily moves away, but they should NOT count toward
 // "does this layer have any mapping" decisions.
-export const GEOM_SPECIFIC_AESTHETICS = ["label", "ymin", "ymax"] as const;
+const GEOM_SPECIFIC_AESTHETICS = ["label", "ymin", "ymax"] as const;
 
 // Full set — use when you need to iterate every possible aesthetic (persist,
 // dataMaps filter). For "does this matter to chart rendering" gates, prefer
@@ -37,7 +37,7 @@ export const AESTHETICS = [
 /** Aesthetics that ggsql requires (beyond universal x/y) for specific geoms.
  *  When the resolved geom matches, plotr highlights any of these that the
  *  layer has NOT mapped yet — so users know which extra dropzones to fill. */
-export const GEOM_SPECIFIC_REQUIRED: Record<string, readonly Aes[]> = {
+const GEOM_SPECIFIC_REQUIRED: Record<string, readonly Aes[]> = {
   text: ["label"],
   ribbon: ["ymin", "ymax"],
   range: ["ymin", "ymax"],
@@ -163,7 +163,7 @@ export interface Layer {
   partition?: string[];
 }
 
-export interface Labels {
+interface Labels {
   title?: string;
   subtitle?: string;
   caption?: string;
@@ -349,28 +349,33 @@ function axisScaleClauseFor(
   return [clause];
 }
 
+// The LayerSettings (fixed colour) + ScaleSettings (palette / reverse) keys for a
+// colour aesthetic. Single source of truth for the fill/stroke key mapping —
+// shared with MappingPanel so the UI and the emitter can't drift.
+export function colorKeys(aes: "fill" | "stroke") {
+  const fill = aes === "fill";
+  return {
+    fixed: aes,
+    no: fill ? "noFill" : "noStroke",
+    discrete: fill ? "fillPaletteDiscrete" : "strokePaletteDiscrete",
+    continuous: fill ? "fillPaletteContinuous" : "strokePaletteContinuous",
+    discreteRev: fill ? "fillPaletteDiscreteReverse" : "strokePaletteDiscreteReverse",
+    continuousRev: fill ? "fillPaletteContinuousReverse" : "strokePaletteContinuousReverse",
+  } as const;
+}
+
 function scaleClausesFor(
   aes: "fill" | "stroke",
   scales: ScaleSettings | undefined,
 ): string[] {
+  const k = colorKeys(aes);
   const out: string[] = [];
-  for (const kind of ["discrete", "continuous"] as const) {
-    const palette =
-      kind === "discrete"
-        ? aes === "fill"
-          ? scales?.fillPaletteDiscrete
-          : scales?.strokePaletteDiscrete
-        : aes === "fill"
-          ? scales?.fillPaletteContinuous
-          : scales?.strokePaletteContinuous;
-    const reverse =
-      kind === "discrete"
-        ? aes === "fill"
-          ? scales?.fillPaletteDiscreteReverse
-          : scales?.strokePaletteDiscreteReverse
-        : aes === "fill"
-          ? scales?.fillPaletteContinuousReverse
-          : scales?.strokePaletteContinuousReverse;
+  for (const [paletteKey, reverseKey] of [
+    [k.discrete, k.discreteRev],
+    [k.continuous, k.continuousRev],
+  ] as const) {
+    const palette = scales?.[paletteKey];
+    const reverse = scales?.[reverseKey];
     if (!palette && !reverse) continue;
     let clause = `SCALE ${aes}`;
     if (palette) clause += ` TO ${palette}`;

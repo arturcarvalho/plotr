@@ -6,8 +6,8 @@
 - **Empty state.** Cold-start shows only the data panel (left) and a 3-step arrow overlay (`1/3 Choose data` → `2/3 Select layer` → `3/3 Drag variables to X, Y, etc.`) that auto-advances with user actions and points at the next affordance. Shown only on the first browser session — once step 3 completes, the "seen" flag is written to `localStorage` (`plotr.tutorialSeen`) and the overlay never returns until storage is cleared. The first layer's side panel is **not** auto-opened during the tutorial so step 2 is observable. Picking a dataset reveals the Build panel + side panels with a fast slide-in; rendering a chart shows the chart + bottom tabs.
 - **Sidebar (left).** Drag or browse a CSV — or click "Palmer Penguins" for the built-in dataset. Header strip shows the `plotr.org` brand (left) and a **⋮ menu** (right). Uploaded CSVs have their header row trimmed cell-by-cell before registration: `country, activity, duration` becomes `country,activity,duration`, so the column shows up as `activity` in the sidebar and `<col> AS y` look-ups work without invisible leading spaces. Data rows are left untouched. Caveat: the trim is a naive comma split — header cells containing commas inside quotes would be mangled, but those are vanishingly rare.
 - **Variable list.** Once a file is loaded, the sidebar lists columns grouped by type. Non-numeric on top (`T` string, `✓` bool, `📅` date), numeric (`#`) at the bottom. Each row is **draggable** onto the build pane.
-- **Header ⋮ menu.** Hover the ⋮ at the top-right of the sidebar header — a menu opens on hover, stays open while the pointer is over it, and closes shortly after the pointer leaves (Escape also closes). It's portaled at a fixed position so its ~340 px panel never widens the 252 px sidebar. Entries: **Replace data** (drops the loaded CSV and clears it from IndexedDB, returning to the Choose-data state; chart config — layers / labels / settings — is kept so you can re-upload a compatible file; subtitle shows the current table name, disabled when no file is loaded), **Clear chart settings** (clears all layers, labels, custom blocks, and shared settings while keeping the loaded file; subtitle shows a live `N variables configured` count of filled dropzones across every layer + shared mappings, disabled at 0), a divider, then links to **plotr on GitHub** (source & issues) and **ggsql.org** (the query language behind plotr) — both open in a new tab — and an **ALPHA** note that plotr is in early development.
-- **Persisted file.** Uploaded CSVs are saved to IndexedDB (single record, last-upload-wins). On page reload the bytes are re-registered with ggsql before plotr restores `activeTable` from the URL hash — your file survives reloads transparently. Panel selection survives reloads too: whichever side panel (chart layer / labels / custom / shared) was open and whichever secondary panel (settings / mapping) was open re-open on the next visit. Stale ids (e.g. you deleted the previously-selected layer) silently fall back to the first-chart-layer auto-open default. The ⋮ menu's "Replace data" is the only way to drop it; private-mode / quota / IDB-missing failures fall back to per-session-only behavior with a console warning. Browser **Back** / **Forward** step through previous chart edits — dropping a variable, typing a label, switching dataset, picking a chart type, etc. Rapid edits within 600 ms coalesce into a single history entry so a burst of typing in the Labels field is one step rather than per-keystroke. Pure UI navigation (clicking a layer card or the settings cog to open / switch the side panel) doesn't add history entries — only the URL is updated silently, so Back never just closes a panel.
+- **Header ⋮ menu.** Hover the ⋮ at the top-right of the sidebar header — a menu opens on hover, stays open while the pointer is over it, and closes shortly after the pointer leaves (Escape also closes). It's portaled at a fixed position so its ~340 px panel never widens the 252 px sidebar. Entries: **Replace data** (drops the loaded CSV and clears it from IndexedDB, returning to the Choose-data state; chart config — layers / labels / settings — is kept so you can re-upload a compatible file; subtitle shows the current table name, disabled when no file is loaded), **Clear chart settings** (clears all layers, labels, custom blocks, and shared settings while keeping the loaded file; subtitle shows a live `N variables configured` count of filled dropzones across every layer + shared mappings, disabled at 0), a divider, an **About** entry that navigates in-app to `/about` (same tab, full-page load), and an **ALPHA** note (filled amber pill + black text, no surrounding box) that plotr is in early development. (The **plotr on GitHub** and **ggsql.org** links now live on the About page, not in this menu.)
+- **Persisted file.** Uploaded CSVs are saved to IndexedDB (single record, last-upload-wins). On page reload the bytes are re-registered with ggsql before plotr restores `activeTable` from the URL hash — your file survives reloads transparently. Panel selection survives reloads too: whichever side panel (chart layer / labels / custom / shared) was open and whichever secondary panel (settings / mapping) was open re-open on the next visit. Stale ids (e.g. you deleted the previously-selected layer) silently fall back to the first-chart-layer auto-open default. The ⋮ menu's "Replace data" is the only way to drop it; private-mode / quota / IDB-missing failures fall back to per-session-only behavior with a console warning. Browser **Back** / **Forward** step through previous chart edits — dropping a variable, typing a label, switching dataset, picking a chart type, etc. Rapid edits within 600 ms coalesce into a single history entry so a burst of typing in the Labels field is one step rather than per-keystroke. Pure UI navigation (clicking a layer card or the settings cog to open / switch the side panel) doesn't add history entries — only the URL is updated silently, so Back never just closes a panel. When the chart and data are both empty — a cold start, or after **Clear chart settings** plus **Replace data** — the URL carries no hash at all (`plotr.org`, not `plotr.org/#s=…`); the `#s=…` payload appears only once there's meaningful content to encode (a mapping, label, setting, custom block, palette, partition, an explicit chart type, or a loaded built-in dataset), and Back / Forward across an emptying step restore then re-clear it.
 - **Build pane (middle).** Photoshop-style narrow icon column.
   - Each chart layer is a small button showing the resolved chart-type icon (▶ play icon when AUTO with no mappings; pie when AUTO with only `Fill color` mapped). Multiple `T` labels layers can coexist — each holds its own title/subtitle + X/Y axis labels; the generated `LABEL` clause merges them last-wins per field. The Subtitle field carries an inline hint that it only renders when a title is set. Fresh sessions start with one chart layer; add a labels layer via `+` when needed.
   - A stacked-layers icon at the top opens **Shared variables** — variable mappings applied to every layer.
@@ -22,12 +22,13 @@
 - **Chart pane (right).** Live-renders the generated ggsql via `vega-embed` (SVG renderer, export-only menu) against the sidebar's active table. When a chart has variables but no CSV is loaded (e.g. just after **Replace data**, or a shared URL whose CSV isn't in IndexedDB), the chart pane and the bottom tabs are both hidden and the entire right-hand section collapses to a single "No data selected" card. The card uses a dimmed `bg-stone-50` background with a rounded `border-stone-300` border (no shadow), and is centered geometrically between the DataPanel's right edge and the window's right edge. The left column drops its `flex-1` in this state so it collapses to the DataPanel's natural width (instead of grabbing 50 % of the window like in the normal layout) and the chart section takes over the whole remaining strip; the section's `pr-2` is canceled with `-mr-2` on the wrapper so the centering isn't pulled left by the chrome padding. The card lists the chart's variables with their type glyph (`#` numeric, `T` string, `✓` bool, `📅` date) followed by the column name, plus a "Drop a CSV in the sidebar to render." hint. Variable types come from an additive `columnKindsCache` in `App.tsx` that's seeded whenever `describeColumns` succeeds and is never pruned mid-session — so the badges keep working after the file is dropped. The cache is also serialized into the URL hash (short key `K`) so the badges survive page reloads and travel with shared URLs even when the recipient doesn't have the CSV in IndexedDB. Variables whose kind still isn't known (e.g. a hand-edited URL that doesn't carry the cache) render as plain names without a badge. Disabled layers' mappings are excluded.
 - **Bottom pane.** Tabs (left → right): **GGSQL** (generated query, selected by default on fresh sessions) · **Problems** (chart errors + Vega warnings) · **Vega Lite** (the Vega-Lite JSON spec ggsql produced for the chart — pretty-printed and copy-button-ready so it can be pasted straight into <https://vega.github.io/editor/>. Shows an italic placeholder until the first successful render; cleared back to the placeholder on chart error or empty query). The Problems tab shows two pill badges — red `⨯ N` for errors, amber `⚠ N` for warnings (each hidden when zero). The error pill briefly pulses when a new error appears. Errors do **not** auto-switch the active tab — Problems opens only when the user clicks it — so the GGSQL or Vega Lite tab stays in view; warnings likewise surface only via the amber badge. When there's an error, the chart pane shows the error message **in place of the chart** — a red-bordered box headed "Chart error" (the stale chart is cleared). When the error is **unrecoverable**, the box adds a "Reload page" action that does `window.location.reload()`. An error is treated as unrecoverable when it matches one of the patterns in `src/lib/errorClass.ts`: an **exact** match for the bare `"Chart error:"` (the no-body sentinel form) OR a **prefix** match for `"ggsql-wasm crashed"`. A hard ggsql-wasm crash (heap OOB, a Rust `unreachable` panic, or a raw wasm `RuntimeError` — classified by `isWasmCrashError` in `src/lib/errorClass.ts`) corrupts the runtime's linear memory; rather than silently resetting the engine in-app (which leaves table selection broken until a manual reload), the chart pane immediately shows the warning **"ggsql-wasm crashed. Reload the page to recover — your chart settings and data are preserved."** with the "Reload page" action. A reload rebuilds a clean runtime and restores everything (settings from the URL hash, the CSV from IndexedDB). Regular `"Chart error: <body>"` messages — usually ggsql validation problems like a missing required aesthetic — are NOT unrecoverable; the user just fixes the chart. Successful renders auto-clear all stale `Chart error:` and unrecoverable messages from the Problems pane; the in-place error display disappears the same instant the chart redraws. Consecutive failures replace the previous `Chart error:` rather than stacking, so the pane shows the current cause only. The unrecoverable flag is derived from the displayed error list, so the moment the next successful render filters those messages out the error box (and its Reload action) disappears. Drag the top edge to resize.
 - **Built-in datasets** (`ggsql:penguins`, `ggsql:airquality`) registered at boot.
+- **Explainer site (`/about`, `/tool/:id`).** A standalone explainer site rendered as its own top-level branch in `main.tsx` (`matchSitePath` in `src/lib/route.ts` decides) — none of the chart builder's state machine runs there; it self-hosts Space Grotesk + IBM Plex fonts (via `@fontsource`, imported by `src/site/Site.tsx`) so the builder at `/` keeps system fonts. Neutrals map to the stone theme (CSS vars); a functional layer-accent palette (data blue / mapping violet / geom green / scale terracotta / stat teal / theme olive / label slate) is kept verbatim. **About** introduces plotr (hero + a `Variables → ggsql → Chart` pipeline; its primary **Play with an example →** opens the real builder at `/`) and, at the bottom under "Learn about layers", links to the three implementing tools (plotr / ggsql / ggplot2) plus external links to **plotr on GitHub** and **ggsql.org** (moved here from the builder's ⋮ menu). The legacy `/tools` path redirects to About (the Tools page was merged in). **Tool** (`/tool/<id>`) focuses one tool — breadcrumb `plotr › About › <tool>` — and embeds the **Layer-Reveal widget**: a penguin scatter that a **Reveal** slider explodes into its Grammar-of-Graphics layers (CSS-3D isometric stack), locked to that tool's layer model, with a **smooth**-trend toggle (ggsql / plotr) and **hover-to-isolate** (hovering a legend row raises that plane and fades the rest). In-site navigation is client-side (History API push/pop, anchors keep middle-click/new-tab); the widget is a static SVG illustration (its own sample data — no ggsql/vega). Reached from the builder's ⋮ menu **About** entry; the Netlify SPA-fallback serves the routes in production.
 
 ## Stack
 
 - Vite 6 + React 19 + TypeScript + Tailwind v4 (`@tailwindcss/vite`).
 - `vega`, `vega-embed`, `vega-lite` for chart rendering.
-- `ggsql-wasm` `pkg/` (prebuilt from `posit-dev/ggsql` v0.3.1) committed at `src/lib/ggsql-wasm/`.
+- `ggsql-wasm` `pkg/` (prebuilt from `posit-dev/ggsql` v0.3.3) committed at `src/lib/ggsql-wasm/`.
 
 ## Setup
 
@@ -37,6 +38,24 @@ npm run dev
 ```
 
 Open <http://localhost:5173>.
+
+## Testing
+
+```sh
+npm test           # Vitest unit tests (src/**/*.test.ts)
+npm run test:e2e   # Playwright end-to-end tests (e2e/, headless Chromium)
+npm run lint       # ESLint (flat config in eslint.config.js)
+npm run typecheck  # tsc -b (app + node tsconfig projects)
+```
+
+`test:e2e` reuses a dev server already running on :5173, or starts one itself.
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and on
+pull requests: four parallel jobs — lint, typecheck, unit tests, and the
+Playwright e2e suite (Chromium; failure traces uploaded as a `playwright-traces`
+artifact). Superseded runs on the same branch are auto-cancelled.
 
 ## Usage
 
@@ -59,7 +78,7 @@ cd ggsql-wasm/library && npm install && npm run build && cd ..
 PATH="$(brew --prefix llvm)/bin:$PATH" \
   CC="$(brew --prefix llvm)/bin/clang" \
   AR="$(brew --prefix llvm)/bin/llvm-ar" \
-  wasm-pack build --target web --profile wasm
+  wasm-pack build --target web --profile wasm --no-opt
 wasm-opt pkg/ggsql_wasm_bg.wasm -o pkg/ggsql_wasm_bg.wasm -Oz --all-features
 rm -rf <plotr>/src/lib/ggsql-wasm
 cp -r pkg/. <plotr>/src/lib/ggsql-wasm/
@@ -69,25 +88,7 @@ sed -i '' '/^\/\/# sourceMappingURL=/d' \
   <plotr>/src/lib/ggsql-wasm/snippets/*/library/dist/lib.js
 ```
 
-**Then re-apply the `__plotr_reset()` patch** — wasm-bindgen's generated `ggsql_wasm.js` caches the wasm instance in a module-private `wasm` var and `__wbg_init()` short-circuits on subsequent calls, so we can't recover from a wasm crash without it. After the copy above, append to `<plotr>/src/lib/ggsql-wasm/ggsql_wasm.js` (just before the final `export { initSync, … }` line):
-
-```js
-export function __plotr_reset() {
-    wasm = undefined;
-    wasmModule = undefined;
-    cachedDataViewMemory0 = null;
-    cachedFloat64ArrayMemory0 = null;
-    cachedUint8ArrayMemory0 = null;
-}
-```
-
-And re-declare it in `ggsql_wasm.d.ts` (next to `__wbg_init`):
-
-```ts
-export function __plotr_reset(): void;
-```
-
-If wasm-bindgen's generator stops emitting one of the `cached*` vars, drop those lines accordingly — `__plotr_reset` only needs to reset whatever caches the new generator declares.
+The vendored files are used exactly as wasm-pack emits them — no hand patches.
 
 Build prereqs: Rust (1.78+), `wasm-pack`, clang with `wasm32-unknown-unknown` target (Homebrew `llvm` on macOS).
 
@@ -107,6 +108,10 @@ src/
     LabelsCard.tsx      title/subtitle toggle button
     LabelsPanel.tsx     labels editor side panel
     AddMenu.tsx         "+ Add" dropdown (Chart / Labels)
+    site/               explainer site: Site.tsx (router + chrome + About/Tools/Tool
+                        pages), LayerReveal.tsx (the 3D layer-explode widget),
+                        models.tsx (per-tool layer defs), charts.tsx (SVG primitives),
+                        data.ts (sample + smooth fit), tokens.ts (theme + accent palette)
     Dropzone.tsx        single aesthetic drop target
     DeleteBanner.tsx    "release to remove" banner during drag
     CodePanel.tsx       generated-ggsql viewer + copy button
@@ -118,9 +123,10 @@ src/
     autoChart.ts        AUTO draw resolution + axis-kind rules
     persist.ts          URL-hash serialize/deserialize
     dragSignal.ts       shared drag state for delete-on-drop UX
+    route.ts            path routing for the explainer site (matchSitePath / routeToPath)
     ggsql-wasm/         prebuilt pkg/ (committed)
 ```
 
 ## Reference
 
-- `GGSQL_DEFAULTS.md` — per-aesthetic and per-geom default values from ggsql v0.3.2 (the version used by `ggsql-wasm`; plotr currently bundles v0.3.1).
+- `GGSQL_DEFAULTS.md` — per-aesthetic and per-geom default values from ggsql v0.3.2, unchanged in the bundled v0.3.3.

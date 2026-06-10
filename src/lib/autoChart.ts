@@ -3,7 +3,7 @@ import type { Aes, Layer } from "./buildQuery";
 
 export const AUTO = "auto";
 
-export type AxisKind = "continuous" | "discrete" | "time" | "empty";
+type AxisKind = "continuous" | "discrete" | "time" | "empty";
 
 type Role = "default" | "compatible";
 
@@ -127,7 +127,7 @@ export function columnAxisKind(
   }
 }
 
-export interface DrawReq {
+interface DrawReq {
   parts: string[];
   isDefault: boolean;
 }

@@ -4,3 +4,10 @@ node_modules
 *.log
 .vite
 *.tsbuildinfo
+# roborev snapshots
+/.roborev/
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

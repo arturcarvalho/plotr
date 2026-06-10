@@ -3,7 +3,7 @@ import type { ColumnKind } from "../lib/ggsql";
 // Glyph rendered inside the square badge for each column type. Visible to the
 // user so it's intentionally short — see also DataPanel's sidebar list and
 // the "no data" card in Viz.tsx where these chips appear together.
-export const GLYPH: Record<ColumnKind, string> = {
+const GLYPH: Record<ColumnKind, string> = {
   numeric: "#",
   string: "T",
   bool: "✓",

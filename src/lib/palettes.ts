@@ -5,14 +5,14 @@
 export const DEFAULT_DISCRETE = "ggsql10";
 export const DEFAULT_CONTINUOUS = "sequential";
 
-export interface DiscretePalette {
+interface DiscretePalette {
   name: string;
   colors: string[];
 }
 
 export type ContinuousCategory = "sequential" | "diverging" | "multi" | "cyclic";
 
-export interface ContinuousPalette {
+interface ContinuousPalette {
   name: string;
   category: ContinuousCategory;
   stops: Array<{ offset: number; color: string }>;

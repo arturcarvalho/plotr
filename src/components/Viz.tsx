@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import type { ColumnKind } from "../lib/ggsql";
 import { ColumnKindBadge } from "./ColumnKindBadge";
 
-export interface NoDataVariable {
+interface NoDataVariable {
   name: string;
   kind: ColumnKind | null;
 }

@@ -15,7 +15,9 @@ import Select, {
   type StylesConfig,
 } from "react-select";
 import type { Aes, LayerSettings, ScaleSettings } from "../lib/buildQuery";
+import { colorKeys } from "../lib/buildQuery";
 import { ClearButton } from "./ClearButton";
+import { CloseIcon } from "./icons";
 import { useDebouncedInput } from "../lib/useDebouncedInput";
 import {
   CONTINUOUS_PALETTES,
@@ -38,7 +40,7 @@ const PalettePreviewContext = createContext<PalettePreviewBag | undefined>(
   undefined,
 );
 
-export type MappingKind = "fixed" | "discrete" | "continuous";
+type MappingKind = "fixed" | "discrete" | "continuous";
 
 interface Props {
   aes: Aes;
@@ -269,20 +271,14 @@ export function MappingPanel({
   let discreteSet = false;
   let continuousSet = false;
   if (isColor) {
-    const fixedKey = aes === "fill" ? "fill" : "stroke";
-    const noKey = aes === "fill" ? "noFill" : "noStroke";
-    const discreteKey =
-      aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
-    const continuousKey =
-      aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
-    const discreteRevKey =
-      aes === "fill"
-        ? "fillPaletteDiscreteReverse"
-        : "strokePaletteDiscreteReverse";
-    const continuousRevKey =
-      aes === "fill"
-        ? "fillPaletteContinuousReverse"
-        : "strokePaletteContinuousReverse";
+    const {
+      fixed: fixedKey,
+      no: noKey,
+      discrete: discreteKey,
+      continuous: continuousKey,
+      discreteRev: discreteRevKey,
+      continuousRev: continuousRevKey,
+    } = colorKeys(aes);
     fixedSet = !!settings[fixedKey] || !!settings[noKey];
     discreteSet = !!scales[discreteKey] || !!scales[discreteRevKey];
     continuousSet = !!scales[continuousKey] || !!scales[continuousRevKey];
@@ -412,18 +408,12 @@ function ColorAestheticPanel({
   onChangeScales: (next: ScaleSettings) => void;
 }) {
   // Fixed colour is per-layer (settings); the palettes are chart-level scales.
-  const discreteKey =
-    aes === "fill" ? "fillPaletteDiscrete" : "strokePaletteDiscrete";
-  const continuousKey =
-    aes === "fill" ? "fillPaletteContinuous" : "strokePaletteContinuous";
-  const discreteRevKey =
-    aes === "fill"
-      ? "fillPaletteDiscreteReverse"
-      : "strokePaletteDiscreteReverse";
-  const continuousRevKey =
-    aes === "fill"
-      ? "fillPaletteContinuousReverse"
-      : "strokePaletteContinuousReverse";
+  const {
+    discrete: discreteKey,
+    continuous: continuousKey,
+    discreteRev: discreteRevKey,
+    continuousRev: continuousRevKey,
+  } = colorKeys(aes);
 
   return (
     <div className="flex flex-col">
@@ -552,8 +542,7 @@ function FixedTab({
   settings: LayerSettings;
   onChangeSettings: (next: LayerSettings) => void;
 }) {
-  const fixedKey = aes === "fill" ? "fill" : "stroke";
-  const noKey = aes === "fill" ? "noFill" : "noStroke";
+  const { fixed: fixedKey, no: noKey } = colorKeys(aes);
   const value = settings[fixedKey] ?? null;
   const noValue = !!settings[noKey];
   const setValue = (v: string | null) =>
@@ -889,24 +878,6 @@ function NumberSlider({
   );
 }
 
-function CloseIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
 
 /** Per-axis break values. Emits `SCALE x SETTING breaks => (<values>)` (or `y`)
  *  to limit the visible axis ticks. Free-form passthrough — the user types the

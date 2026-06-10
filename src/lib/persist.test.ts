@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deserialize,
+  isEmptyState,
   serialize,
   type ActivePanel,
   type Persisted,
@@ -1275,5 +1276,138 @@ describe("layer partition (PARTITION BY) persistence", () => {
       "species",
       "island",
     ]);
+  });
+});
+
+describe("isEmptyState", () => {
+  // The cold-start app state: one blank AUTO layer, nothing else.
+  const coldStart: Persisted = {
+    layers: [{ id: "L1", draw: "auto", mappings: {} } satisfies Layer],
+    labels: [],
+    project: {},
+    sharedMappings: {},
+    activeTable: null,
+  };
+
+  it("is true for the fully-empty fixture (no layers)", () => {
+    expect(isEmptyState(empty)).toBe(true);
+  });
+
+  it("is true for cold start (one blank AUTO layer)", () => {
+    expect(isEmptyState(coldStart)).toBe(true);
+  });
+
+  it("is true for several blank layers", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        layers: [
+          { id: "L1", draw: "auto", mappings: {} },
+          { id: "L2", draw: "auto", mappings: {} },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores ephemeral panel + cache state", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        activePanel: { kind: "layer", layerId: "L1" },
+        secondaryPanel: { kind: "settings" },
+        columnKindsCache: { bill_len: "numeric" },
+      }),
+    ).toBe(true);
+  });
+
+  it("treats a blank labels layer (id/position only) as empty", () => {
+    expect(
+      isEmptyState({ ...coldStart, labels: [{ id: "B1", position: 0 }] }),
+    ).toBe(true);
+  });
+
+  it("treats a whitespace-only custom layer as empty", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        customLayers: [{ id: "C1", ggsql: "   \n ", position: 0 }],
+      }),
+    ).toBe(true);
+  });
+
+  it("is false when a built-in table is active", () => {
+    expect(isEmptyState({ ...coldStart, activeTable: "ggsql:penguins" })).toBe(
+      false,
+    );
+  });
+
+  it("is false when a layer has a mapping", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        layers: [{ id: "L1", draw: "auto", mappings: { x: "bill_len" } }],
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when a layer has a non-AUTO draw", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        layers: [{ id: "L1", draw: "bar", mappings: {} }],
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when a layer has settings", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        layers: [{ id: "L1", draw: "auto", mappings: {}, settings: { opacity: 0.5 } }],
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when a layer has a partition", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        layers: [{ id: "L1", draw: "auto", mappings: {}, partition: ["species"] }],
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when a labels layer has a title", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        labels: [{ id: "B1", position: 0, title: "Penguins" }],
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when a custom layer has content", () => {
+    expect(
+      isEmptyState({
+        ...coldStart,
+        customLayers: [{ id: "C1", ggsql: "SCALE x TO log", position: 0 }],
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when project is non-default", () => {
+    expect(isEmptyState({ ...coldStart, project: { ratio: 1.5 } })).toBe(false);
+  });
+
+  it("is false when a scale palette is set", () => {
+    expect(
+      isEmptyState({ ...coldStart, scales: { fillPaletteDiscrete: "viridis" } }),
+    ).toBe(false);
+  });
+
+  it("is false when a shared mapping is set", () => {
+    expect(
+      isEmptyState({ ...coldStart, sharedMappings: { x: "bill_len" } }),
+    ).toBe(false);
   });
 });

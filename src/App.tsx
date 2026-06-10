@@ -25,8 +25,10 @@ import {
 } from "./lib/autoChart";
 import {
   deserialize,
+  isEmptyState,
   serialize,
   type ActivePanel,
+  type Persisted,
   type SecondaryPanel,
 } from "./lib/persist";
 import { clearLastCsv, loadLastCsv, saveLastCsv } from "./lib/csvStore";
@@ -59,7 +61,7 @@ import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 // Debounce window for chart re-renders. Rapid input (slider drags, text typing)
 // resets the timer on every change; the chart only renders once the user pauses
 // for this long. Live preview is sacrificed for zero ggsql.execute calls during
-// active scrubbing — important because ggsql-wasm v0.3.1 OOBs on rapid execute,
+// active scrubbing — important because ggsql-wasm OOBs on rapid execute,
 // especially with multi-layer queries. Lower = quicker post-pause render, more
 // renders; higher = slower preview but cheaper. Tune here when the feel is off.
 const CHART_DEBOUNCE_MS = 200;
@@ -190,22 +192,26 @@ export default function App() {
   //     so opening/closing panels doesn't pollute the back-button history.
   // Both close over the full state and serialise the same complete payload,
   // so the URL is always a single source of truth.
-  const buildPersistPayload = () =>
-    serialize({
-      layers,
-      labels,
-      customLayers: customLayers.length > 0 ? customLayers : undefined,
-      project,
-      scales,
-      sharedMappings,
-      activeTable,
-      activePanel,
-      secondaryPanel,
-      columnKindsCache:
-        Object.keys(columnKindsCache).length > 0
-          ? columnKindsCache
-          : undefined,
-    });
+  const getPersistedState = (): Persisted => ({
+    layers,
+    labels,
+    customLayers: customLayers.length > 0 ? customLayers : undefined,
+    project,
+    scales,
+    sharedMappings,
+    activeTable,
+    activePanel,
+    secondaryPanel,
+    columnKindsCache:
+      Object.keys(columnKindsCache).length > 0 ? columnKindsCache : undefined,
+  });
+
+  // The next URL hash for the current state, or "" when there's nothing
+  // meaningful to encode — App then writes a clean URL with no `#` at all.
+  const buildNextHash = async (): Promise<string> => {
+    const state = getPersistedState();
+    return isEmptyState(state) ? "" : "#" + (await serialize(state));
+  };
 
   const lastChartPushTsRef = useRef(0);
   const CHART_HISTORY_DEBOUNCE_MS = 600;
@@ -220,17 +226,17 @@ export default function App() {
     if (pendingActiveTableRef.current !== null) return;
     let cancelled = false;
     (async () => {
-      const payload = await buildPersistPayload();
+      const next = await buildNextHash();
       if (cancelled) return;
-      const next = "#" + payload;
       if (window.location.hash === next) return;
+      const url = next || window.location.pathname + window.location.search;
       const now = Date.now();
       const inDebounceWindow =
         now - lastChartPushTsRef.current < CHART_HISTORY_DEBOUNCE_MS;
       if (inDebounceWindow) {
-        window.history.replaceState(null, "", next);
+        window.history.replaceState(null, "", url);
       } else {
-        window.history.pushState(null, "", next);
+        window.history.pushState(null, "", url);
       }
       lastChartPushTsRef.current = now;
     })();
@@ -261,11 +267,11 @@ export default function App() {
     if (pendingActiveTableRef.current !== null) return;
     let cancelled = false;
     (async () => {
-      const payload = await buildPersistPayload();
+      const next = await buildNextHash();
       if (cancelled) return;
-      const next = "#" + payload;
       if (window.location.hash === next) return;
-      window.history.replaceState(null, "", next);
+      const url = next || window.location.pathname + window.location.search;
+      window.history.replaceState(null, "", url);
     })();
     return () => {
       cancelled = true;
@@ -281,9 +287,26 @@ export default function App() {
     if (!hydrated) return;
     const onPop = async () => {
       const gen = ++popGenRef.current;
-      const data = await deserialize(window.location.hash);
+      const hash = window.location.hash;
+      const data = await deserialize(hash);
       if (gen !== popGenRef.current) return; // a newer popstate already landed
-      if (!data) return;
+      if (!data) {
+        // A hash-less entry (clean URL) is the empty state — reset to cold
+        // start. A non-empty but undecodable `s=` is malformed: keep current.
+        if (!/(?:^|[#&])s=/.test(hash)) {
+          setLayers([initialLayer()]);
+          setLabels([]);
+          setCustomLayers([]);
+          setProject({});
+          setScales({});
+          setSharedMappings({});
+          setActiveTable(null);
+          setActivePanel(null);
+          setSecondaryPanel(null);
+          setColumnKindsCache({});
+        }
+        return;
+      }
       setLayers(data.layers.length > 0 ? data.layers : [initialLayer()]);
       setLabels(data.labels);
       setCustomLayers(data.customLayers ?? []);
@@ -316,7 +339,7 @@ export default function App() {
     if (!ready) return;
     let cancelled = false;
     (async () => {
-      let lastCsv: Awaited<ReturnType<typeof loadLastCsv>> = null;
+      let lastCsv: Awaited<ReturnType<typeof loadLastCsv>>;
       try {
         lastCsv = await loadLastCsv();
         if (!cancelled && lastCsv) {

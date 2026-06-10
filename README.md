@@ -10,7 +10,7 @@
 
 ## Why?
 
-Creating charts is hard. On the surface, all charting systems do the same, but there's something special about the ones based off of [The Grammar of Graphics](https://link.springer.com/book/10.1007/0-387-28695-0). [ggsql](https://ggsql.org/) is one of these special systems.
+Creating charts is hard. All charting systems do the same, but there's something special about the ones based off of [The Grammar of Graphics](https://link.springer.com/book/10.1007/0-387-28695-0). [ggsql](https://ggsql.org/) is one of these special systems.
 
 It's not possible to explain why these systems are so good with a list of features, you have to _experience_ them. Even so ggsql is a new language, and it can be hard to wrap your head around the new terms and concepts. That's where [plotr](https://plotr.org) comes in!
 

@@ -642,6 +642,45 @@ export async function serialize(p: Persisted): Promise<string> {
   return `s=${base64UrlEncode(gz)}`;
 }
 
+// A layer carries content when it has any mapping, any settings, any partition,
+// or an explicit (non-AUTO) draw choice. The disabled flag alone is not content.
+function layerHasContent(l: Layer): boolean {
+  const e = encodeLayer(l);
+  return (
+    Object.keys(e.m).length > 0 ||
+    e.s !== undefined ||
+    (e.p !== undefined && e.p.length > 0) ||
+    e.d !== AUTO
+  );
+}
+
+// A labels layer carries content when any text field is set. id/position and the
+// disabled flag are not content.
+function labelHasContent(l: LabelsLayer): boolean {
+  const e = encodeLabels(l);
+  return (
+    e.t !== undefined ||
+    e.st !== undefined ||
+    e.c !== undefined ||
+    e.x !== undefined ||
+    e.y !== undefined
+  );
+}
+
+// True when the state holds nothing worth encoding into the URL — no data and no
+// chart content. Ephemeral UI (activePanel / secondaryPanel / columnKindsCache)
+// is ignored, so App can drop the hash entirely on a cold start or a full reset.
+export function isEmptyState(p: Persisted): boolean {
+  if (isNonEmptyString(p.activeTable)) return false;
+  if (Object.keys(encodeMappings(p.sharedMappings)).length > 0) return false;
+  if (Object.keys(encodeProject(p.project)).length > 0) return false;
+  if (p.scales && Object.keys(encodeScales(p.scales)).length > 0) return false;
+  if (p.customLayers?.some((c) => c.ggsql.trim().length > 0)) return false;
+  if (p.labels.some(labelHasContent)) return false;
+  if (p.layers.some(layerHasContent)) return false;
+  return true;
+}
+
 export async function deserialize(hash: string): Promise<Persisted | null> {
   if (!hash) return null;
   const h = hash.startsWith("#") ? hash.slice(1) : hash;
