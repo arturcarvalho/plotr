@@ -30,6 +30,7 @@ import {
 import { drawRequirements } from "../lib/autoChart";
 import { ChartIcon } from "./ChartIcon";
 import { ClearButton } from "./ClearButton";
+import { NumberField } from "./NumberField";
 import { CloseIcon } from "./icons";
 
 interface Props {
@@ -68,20 +69,6 @@ const SMOOTH_METHODS: SmoothMethod[] = [
 // place so they're easy to audit against GGSQL_DEFAULTS.md.
 // ────────────────────────────────────────────────────────────────────────────
 
-const LINEWIDTH_DEFAULT_BY_GEOM: Record<string, string> = {
-  point: "1.0",
-  line: "1.5",
-  tile: "1.0",
-  violin: "1.0",
-  boxplot: "1.0",
-  density: "1.0",
-  area: "1.0",
-  smooth: "2.0",
-  ribbon: "1.0",
-  range: "1.0",
-  rule: "1.0",
-};
-
 const POSITION_DEFAULT_BY_GEOM: Record<string, string> = {
   bar: "stack",
   point: "identity",
@@ -103,18 +90,8 @@ const POSITION_OPTIONS_BY_GEOM: Record<string, Position[]> = {
   point: POINT_POSITIONS,
 };
 
-interface WidthConfig {
-  defaultLabel: string;
-  min: number;
-  max: number;
-  step: number;
-}
-const WIDTH_CONFIG_BY_GEOM: Record<string, WidthConfig> = {
-  bar: { defaultLabel: "0.9", min: 0, max: 1, step: 0.05 },
-  violin: { defaultLabel: "0.9", min: 0, max: 1, step: 0.05 },
-  boxplot: { defaultLabel: "0.9", min: 0, max: 1, step: 0.05 },
-  range: { defaultLabel: "10.0", min: 0, max: 50, step: 0.5 },
-};
+// Geoms that expose a Width setting (others have no `width` param in ggsql).
+const WIDTH_GEOMS = new Set(["bar", "violin", "boxplot", "range"]);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Cross-geom field wrappers. Each one resolves per-geom defaults from the maps
@@ -129,13 +106,11 @@ interface FieldProps {
 
 function LinewidthSlider({ geom, settings, onChange }: FieldProps) {
   return (
-    <NumberSliderField
+    <NumberField
+      geom={geom}
+      settingKey="linewidth"
       label="Linewidth"
       value={settings.linewidth ?? null}
-      defaultLabel={LINEWIDTH_DEFAULT_BY_GEOM[geom]}
-      min={0}
-      max={5}
-      step={0.1}
       onChange={(v) => onChange({ ...settings, linewidth: v ?? undefined })}
     />
   );
@@ -155,16 +130,13 @@ function PositionRadio({ geom, settings, onChange }: FieldProps) {
 }
 
 function WidthSlider({ geom, settings, onChange }: FieldProps) {
-  const cfg = WIDTH_CONFIG_BY_GEOM[geom];
-  if (!cfg) return null;
+  if (!WIDTH_GEOMS.has(geom)) return null;
   return (
-    <NumberSliderField
+    <NumberField
+      geom={geom}
+      settingKey="width"
       label="Width"
       value={settings.width ?? null}
-      defaultLabel={cfg.defaultLabel}
-      min={cfg.min}
-      max={cfg.max}
-      step={cfg.step}
       onChange={(v) => onChange({ ...settings, width: v ?? undefined })}
     />
   );
@@ -185,33 +157,25 @@ function OrientationRadio({
   );
 }
 
-function BandwidthInput({
-  settings,
-  onChange,
-}: Omit<FieldProps, "geom">) {
+function BandwidthInput({ geom, settings, onChange }: FieldProps) {
   return (
-    <NumberInputField
+    <NumberField
+      geom={geom}
+      settingKey="bandwidth"
       label="Bandwidth"
       value={settings.bandwidth ?? null}
-      min={0}
-      step={0.05}
       onChange={(v) => onChange({ ...settings, bandwidth: v ?? undefined })}
     />
   );
 }
 
-function AdjustSlider({
-  settings,
-  onChange,
-}: Omit<FieldProps, "geom">) {
+function AdjustSlider({ geom, settings, onChange }: FieldProps) {
   return (
-    <NumberSliderField
+    <NumberField
+      geom={geom}
+      settingKey="adjust"
       label="Adjust"
       value={settings.adjust ?? null}
-      defaultLabel="1.0"
-      min={0.1}
-      max={3}
-      step={0.1}
       onChange={(v) => onChange({ ...settings, adjust: v ?? undefined })}
     />
   );
@@ -334,8 +298,8 @@ export function ChartTypePanel({
                 <LinewidthSlider geom="violin" settings={settings} onChange={onChangeSettings} />
                 <PositionRadio geom="violin" settings={settings} onChange={onChangeSettings} />
                 <WidthSlider geom="violin" settings={settings} onChange={onChangeSettings} />
-                <BandwidthInput settings={settings} onChange={onChangeSettings} />
-                <AdjustSlider settings={settings} onChange={onChangeSettings} />
+                <BandwidthInput geom="violin" settings={settings} onChange={onChangeSettings} />
+                <AdjustSlider geom="violin" settings={settings} onChange={onChangeSettings} />
                 <KernelDropdown settings={settings} onChange={onChangeSettings} />
                 <RadioField
                   label="Side"
@@ -346,13 +310,11 @@ export function ChartTypePanel({
                     onChangeSettings({ ...settings, side: v ?? undefined })
                   }
                 />
-                <NumberSliderField
+                <NumberField
+                  geom="violin"
+                  settingKey="tails"
                   label="Tails"
                   value={settings.tails ?? null}
-                  defaultLabel="3.0"
-                  min={0}
-                  max={10}
-                  step={0.5}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, tails: v ?? undefined })
                   }
@@ -391,8 +353,8 @@ export function ChartTypePanel({
                     onChangeSettings({ ...settings, method: v ?? undefined })
                   }
                 />
-                <BandwidthInput settings={settings} onChange={onChangeSettings} />
-                <AdjustSlider settings={settings} onChange={onChangeSettings} />
+                <BandwidthInput geom="smooth" settings={settings} onChange={onChangeSettings} />
+                <AdjustSlider geom="smooth" settings={settings} onChange={onChangeSettings} />
                 <KernelDropdown settings={settings} onChange={onChangeSettings} />
               </>
             )}
@@ -407,8 +369,8 @@ export function ChartTypePanel({
               <>
                 <LinewidthSlider geom="density" settings={settings} onChange={onChangeSettings} />
                 <PositionRadio geom="density" settings={settings} onChange={onChangeSettings} />
-                <BandwidthInput settings={settings} onChange={onChangeSettings} />
-                <AdjustSlider settings={settings} onChange={onChangeSettings} />
+                <BandwidthInput geom="density" settings={settings} onChange={onChangeSettings} />
+                <AdjustSlider geom="density" settings={settings} onChange={onChangeSettings} />
                 <KernelDropdown settings={settings} onChange={onChangeSettings} />
               </>
             )}
@@ -435,13 +397,11 @@ export function ChartTypePanel({
                     })
                   }
                 />
-                <NumberSliderField
+                <NumberField
+                  geom="boxplot"
+                  settingKey="coef"
                   label="Coef"
                   value={settings.coef ?? null}
-                  defaultLabel="1.5"
-                  min={0}
-                  max={5}
-                  step={0.1}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, coef: v ?? undefined })
                   }
@@ -451,13 +411,11 @@ export function ChartTypePanel({
             {effective === "rule" && (
               <>
                 <LinewidthSlider geom="rule" settings={settings} onChange={onChangeSettings} />
-                <NumberSliderField
+                <NumberField
+                  geom="rule"
+                  settingKey="slope"
                   label="Slope"
                   value={settings.slope ?? null}
-                  defaultLabel="0"
-                  min={-5}
-                  max={5}
-                  step={0.1}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, slope: v ?? undefined })
                   }
@@ -505,13 +463,11 @@ export function ChartTypePanel({
                     />
                   </div>
                 </div>
-                <NumberSliderField
+                <NumberField
+                  geom="text"
+                  settingKey="rotation"
                   label="Rotation"
                   value={settings.rotation ?? null}
-                  defaultLabel="0"
-                  min={0}
-                  max={360}
-                  step={1}
                   onChange={(v) =>
                     onChangeSettings({ ...settings, rotation: v ?? undefined })
                   }
@@ -779,57 +735,6 @@ function PreviewSelectField<T extends string>({
   );
 }
 
-function NumberSliderField({
-  label,
-  value,
-  defaultLabel,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: number | null;
-  /** ggsql's fallback for this setting (e.g. "1.5"). Shown next to "default"
-   *  when the slider is unset. Omit when ggsql has no concrete fallback. */
-  defaultLabel?: string;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number | null) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
-        <span>{label}</span>
-        <span className="text-[10px] text-stone-500">
-          {value === null
-            ? defaultLabel
-              ? `default (${defaultLabel})`
-              : "default"
-            : value}
-        </span>
-      </span>
-      <div className="flex items-center gap-2">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value ?? ""}
-          onChange={(e) =>
-            onChange(e.target.value === "" ? null : Number(e.target.value))
-          }
-          className="flex-1"
-        />
-        {value !== null && (
-          <ClearButton onClick={() => onChange(null)} />
-        )}
-      </div>
-    </label>
-  );
-}
-
 // Two number inputs binding independently to `{ x?, y? }`, stacked X-over-Y.
 // A blank input stays blank — no phantom zero — and the ggsql emitter
 // zero-fills only when one axis is set and the other isn't. × in the header
@@ -895,57 +800,8 @@ function OffsetField({
   );
 }
 
-// Like NumberSliderField but a freeform number input — for data-dependent
-// settings where ranges are unknowable up-front (e.g. histogram binwidth).
-function NumberInputField({
-  label,
-  value,
-  defaultLabel,
-  step,
-  min,
-  onChange,
-}: {
-  label: string;
-  value: number | null;
-  defaultLabel?: string;
-  step?: number;
-  min?: number;
-  onChange: (v: number | null) => void;
-}) {
-  return (
-    <div>
-      <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
-        <span>{label}</span>
-        <span className="text-[10px] text-stone-500">
-          {value === null
-            ? defaultLabel
-              ? `default (${defaultLabel})`
-              : "default"
-            : value}
-        </span>
-      </span>
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          value={value ?? ""}
-          min={min}
-          step={step}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange(v === "" ? null : Number(v));
-          }}
-          className="flex-1 rounded border border-stone-300 px-2 py-0.5 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
-        />
-        {value !== null && (
-          <ClearButton onClick={() => onChange(null)} />
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Freeform string input for settings whose value is data-shape-dependent
-// (e.g. text.format = `%.2f`). Mirrors NumberInputField's chrome.
+// (e.g. text.format = `%.2f`).
 function TextInputField({
   label,
   value,
@@ -1161,23 +1017,21 @@ function HistogramBlock({
         </div>
       </div>
       {binStrategy === "count" ? (
-        <NumberSliderField
+        <NumberField
+          geom="histogram"
+          settingKey="bins"
           label="Bins"
           value={settings.bins ?? null}
-          defaultLabel="30"
-          min={1}
-          max={200}
-          step={1}
           onChange={(v) =>
             onChangeSettings({ ...settings, bins: v ?? undefined })
           }
         />
       ) : (
-        <NumberInputField
+        <NumberField
+          geom="histogram"
+          settingKey="binwidth"
           label="Binwidth"
           value={settings.binwidth ?? null}
-          min={0}
-          step={0.1}
           onChange={(v) =>
             onChangeSettings({ ...settings, binwidth: v ?? undefined })
           }

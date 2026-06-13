@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { EXAMPLE_HASH, seedTutorialSeen } from "./fixtures";
+import { EXAMPLE_HASH, TEXT_MISSING_LABEL_HASH, seedTutorialSeen } from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
   await seedTutorialSeen(page);
@@ -115,5 +115,144 @@ test.describe("chart builder", () => {
     await page.getByLabel("Menu").click();
     await page.getByRole("menuitem", { name: /Clear chart settings/ }).click();
     await expect(page.locator("pre")).not.toContainText("DRAW point");
+  });
+});
+
+test.describe("missing required aesthetics", () => {
+  test("a layer missing a required aesthetic is skipped with a warning", async ({
+    page,
+  }) => {
+    await page.goto(`/${TEXT_MISSING_LABEL_HASH}`);
+    // The healthy scatter layer still renders — no chart-replacing error.
+    await expect(chartMark(page)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Chart error")).toHaveCount(0);
+
+    // The amber banner floats over the top of the (still rendering) chart.
+    await expect(
+      page.getByText("Layer not shown yet", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "You need to drag a variable to the Label to see the Text labels",
+      ),
+    ).toBeVisible();
+
+    const ggsql = page.locator("pre");
+    await expect(ggsql).toContainText("DRAW point");
+    await expect(ggsql).not.toContainText("DRAW text");
+
+    // Amber badge on the Problems tab; opening it shows the same warning
+    // again (banner + problems row).
+    const problemsTab = page.getByRole("button", { name: /Problems/ });
+    await expect(problemsTab).toContainText("1");
+    await problemsTab.click();
+    await expect(
+      page.getByText(
+        "You need to drag a variable to the Label to see the Text labels",
+      ),
+    ).toHaveCount(2);
+  });
+});
+
+test.describe("data tab", () => {
+  test("shows the top 100 rows with working sort and search", async ({
+    page,
+  }) => {
+    await page.goto(`/${EXAMPLE_HASH}`);
+    await expect(chartMark(page)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Data", exact: true }).click();
+
+    // 100-row preview of the 344-row penguins table.
+    await expect(page.getByText("first 100 of 344 rows")).toBeVisible();
+    await expect(
+      page.getByRole("columnheader", { name: "species", exact: true }),
+    ).toBeVisible();
+
+    // Sorting: asc then desc on the numeric bill_dep column flips the top value.
+    const headers = page.locator("thead th");
+    const idx = await headers.evaluateAll((ths) =>
+      ths.findIndex((th) => th.textContent?.startsWith("bill_dep")),
+    );
+    const firstCell = page.locator("tbody tr").first().locator("td").nth(idx);
+    await headers.nth(idx).click();
+    const ascVal = Number(await firstCell.innerText());
+    await headers.nth(idx).click();
+    const descVal = Number(await firstCell.innerText());
+    expect(ascVal).toBeLessThan(descVal);
+
+    // Search filters rows; a no-match query shows the empty state.
+    await page.getByLabel("Search rows").fill("zzz_no_match");
+    await expect(page.getByText("0 of 100 rows")).toBeVisible();
+    await expect(page.getByText("No matching rows.")).toBeVisible();
+  });
+});
+
+test.describe("numeric setting defaults", () => {
+  test("typing the default unsets it; a non-default emits and clamps", async ({
+    page,
+  }) => {
+    await page.goto(`/${EXAMPLE_HASH}`);
+    await expect(chartMark(page)).toBeVisible({ timeout: 15_000 });
+    // The first (scatter/point) layer's panel auto-opens; the header actions
+    // appear on hover, then the chevron opens the chart-type settings.
+    await page.getByText("Scatter plot", { exact: true }).hover();
+    await page
+      .getByRole("button", { name: "Open chart settings" })
+      .first()
+      .click();
+
+    // Empty field advertises the ggsql default as its placeholder; locate by
+    // it since it stays stable as the value changes.
+    const linewidth = page.getByPlaceholder("default (1)");
+    await expect(linewidth).toBeVisible();
+
+    const ggsql = page.locator("pre");
+    // A non-default value is emitted after the debounce (no Enter needed).
+    await linewidth.fill("2");
+    await expect(ggsql).toContainText("linewidth => 2");
+
+    // Typing point's default (1) removes it from the query and clears the field.
+    await linewidth.fill("1");
+    await expect(ggsql).not.toContainText("linewidth =>");
+    await expect(linewidth).toHaveValue("");
+  });
+});
+
+test.describe("clamp notice", () => {
+  test("an out-of-range value clamps to the limit and says so", async ({
+    page,
+  }) => {
+    await page.goto(`/${EXAMPLE_HASH}`);
+    await expect(chartMark(page)).toBeVisible({ timeout: 15_000 });
+    // The fixture restores the Opacity aesthetic panel; Fixed opacity is
+    // bounded 0–1, so an over-range entry clamps with a notice.
+    const opacity = page.getByPlaceholder("default (0.8)");
+    await expect(opacity).toBeVisible();
+    await opacity.fill("5");
+    await expect(page.getByText("Limited to 1 (max 1)")).toBeVisible();
+    await expect(opacity).toHaveValue("1");
+  });
+});
+
+test.describe("fill color panel", () => {
+  test("discrete mapping shows palette mode, reverse + no-fill switches", async ({
+    page,
+  }) => {
+    await page.goto(`/${EXAMPLE_HASH}`);
+    await expect(chartMark(page)).toBeVisible({ timeout: 15_000 });
+    // Open the Fill color aesthetic panel (species is a discrete mapping).
+    await page.getByText("Fill color", { exact: true }).click();
+
+    await expect(page.getByText("Palette", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("ggsql10", { exact: false }).first()).toBeVisible();
+
+    const ggsql = page.locator("pre");
+    // Reverse palette switch → bare SCALE fill reverse.
+    await page.getByRole("switch", { name: "Reverse palette" }).click();
+    await expect(ggsql).toContainText("SCALE fill SETTING reverse => true");
+
+    // No fill switch (footer, in every mode) → fill => null.
+    await page.getByRole("switch", { name: "No fill color" }).click();
+    await expect(ggsql).toContainText("fill => null");
   });
 });

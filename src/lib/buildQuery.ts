@@ -395,6 +395,107 @@ const projectClause = (p: ProjectSettings | undefined): string[] => {
   return ["PROJECT TO cartesian", `  SETTING ${settingPairs(entries)}`];
 };
 
+/** Gate + resolution shared by `layerDrawClause` and
+ *  `missingRequiredWarnings` so skip and warning can't drift. Null means the
+ *  layer wouldn't emit a DRAW at all (no own/shared universal aesthetics, or
+ *  no resolvable draw) — NOT a warnable state. `missing` lists geom-required
+ *  aesthetics the layer hasn't mapped; only the layer's own mappings matter
+ *  because `label`/`ymin`/`ymax` are not universal aesthetics, so the shared
+ *  panel can never supply them. */
+function layerEmissionState(
+  layer: Layer,
+  columns: ColumnInfo[],
+  sharedMappings?: Partial<Record<Aes, string>>,
+): { draw: string; missing: Aes[] } | null {
+  const sharedHasAesthetic = sharedMappings
+    ? UNIVERSAL_AESTHETICS.some((a) => sharedMappings[a])
+    : false;
+  const hasOwn = UNIVERSAL_AESTHETICS.some((a) => layer.mappings[a]);
+  if (!hasOwn && !sharedHasAesthetic) return null;
+  const draw = resolveDraw(layer, columns, sharedMappings);
+  if (!draw) return null;
+  return { draw, missing: computeMissingRequired(draw, layer.mappings) };
+}
+
+// Human names for the geom-specific aesthetics, matching the dropzone
+// labels in MappingFields.tsx ("Label", "Y min", "Y max").
+const AES_LABELS: Partial<Record<Aes, string>> = {
+  label: "Label",
+  ymin: "Y min",
+  ymax: "Y max",
+};
+
+/** One warning string per non-disabled layer that resolves a draw but is
+ *  missing a geom-required aesthetic — exactly the layers `layerDrawClause`
+ *  skips for that reason. Shown as amber entries in the Problems pane and in
+ *  the chart-pane banner, phrased as the action that fixes it: "You need to
+ *  drag a variable to the <dropzone(s)> to see the <chart type>". */
+export function missingRequiredWarnings(
+  layers: Layer[],
+  columns: ColumnInfo[],
+  sharedMappings?: Partial<Record<Aes, string>>,
+): string[] {
+  const out: string[] = [];
+  for (const l of layers) {
+    if (l.disabled) continue;
+    const state = layerEmissionState(l, columns, sharedMappings);
+    if (!state || state.missing.length === 0) continue;
+    const names = state.missing.map((a) => AES_LABELS[a] ?? a);
+    const list =
+      names.length > 1
+        ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+        : names[0];
+    const noun = names.length > 1 ? "variables" : "a variable";
+    out.push(
+      `You need to drag ${noun} to the ${list} to see the ${chartLabel(state.draw)}`,
+    );
+  }
+  return out;
+}
+
+/** The DRAW clause `layer` would emit (plus the resolved plotr draw token),
+ *  or null when the layer has no effective aesthetics (own or shared), no
+ *  resolvable draw, or a missing geom-required aesthetic (text→label,
+ *  ribbon/range→ymin+ymax — those layers are skipped from emission and
+ *  reported by `missingRequiredWarnings`). Ignores `disabled` — callers gate
+ *  on that; convert-to-custom wants the clause regardless. A `pie` layer
+ *  reports draw "pie" while its clause emits `DRAW bar`; the chart-level
+ *  polar projection stays with buildQuery. */
+export function layerDrawClause(
+  layer: Layer,
+  columns: ColumnInfo[],
+  sharedMappings?: Partial<Record<Aes, string>>,
+): { clause: string; draw: string } | null {
+  const state = layerEmissionState(layer, columns, sharedMappings);
+  if (!state || state.missing.length > 0) return null;
+  const draw = state.draw;
+  // pie is a plotr token; ggsql draws it as a polar bar.
+  const emittedDraw = draw === "pie" ? "bar" : draw;
+  const dataMaps = AESTHETICS.filter((a) => {
+    if (!layer.mappings[a]) return false;
+    if (a === "fill" && layer.settings?.noFill) return false;
+    if (a === "stroke" && layer.settings?.noStroke) return false;
+    // `label` is text-only; suppress for any other geom.
+    if (a === "label" && draw !== "text") return false;
+    // `ymin` / `ymax` only apply to ribbon + range (the two geoms with
+    // pos2min/pos2max requirements per ggsql); suppress everywhere else.
+    if ((a === "ymin" || a === "ymax") && draw !== "ribbon" && draw !== "range")
+      return false;
+    // ribbon + range take pos2min/pos2max for the secondary axis — plain
+    // `y` is NOT in their `aesthetics()` list, so ggsql's validate_mapping
+    // errors on it. Drop a stale `y` mapping rather than pass through.
+    if (a === "y" && (draw === "ribbon" || draw === "range")) return false;
+    return true;
+  }).map((a) => `${layer.mappings[a]} AS ${a}`);
+  const mappingClause = dataMaps.length
+    ? ` MAPPING ${dataMaps.join(", ")}`
+    : "";
+  return {
+    draw,
+    clause: `DRAW ${emittedDraw}${mappingClause}${layerSettingClause(layer.settings)}${layerFilterClause(layer.settings?.filter)}${layerPartitionClause(layer.partition)}`,
+  };
+}
+
 export function buildQuery(
   table: string,
   layers: Layer[],
@@ -416,10 +517,6 @@ export function buildQuery(
   }
   if (!table) return null;
 
-  const sharedHasAesthetic = sharedMappings
-    ? UNIVERSAL_AESTHETICS.some((a) => sharedMappings[a])
-    : false;
-
   // Custom layers slot in by `position`: same convention as `LabelsLayer`.
   // Position N inserts the custom block(s) just before the i-th DRAW line;
   // position >= layers.length emits at the trailing slot.
@@ -439,39 +536,10 @@ export function buildQuery(
   layers.forEach((l, i) => {
     drawLines.push(...customsAt(i));
     if (l.disabled) return;
-    const hasOwn = UNIVERSAL_AESTHETICS.some((a) => l.mappings[a]);
-    if (!hasOwn && !sharedHasAesthetic) return;
-    const draw = resolveDraw(l, columns, sharedMappings);
-    if (!draw) return;
-    if (draw === "pie") anyPie = true;
-    // pie is a plotr token; ggsql draws it as a polar bar.
-    const emittedDraw = draw === "pie" ? "bar" : draw;
-    const dataMaps = AESTHETICS.filter((a) => {
-      if (!l.mappings[a]) return false;
-      if (a === "fill" && l.settings?.noFill) return false;
-      if (a === "stroke" && l.settings?.noStroke) return false;
-      // `label` is text-only; suppress for any other geom.
-      if (a === "label" && draw !== "text") return false;
-      // `ymin` / `ymax` only apply to ribbon + range (the two geoms with
-       // pos2min/pos2max requirements per ggsql); suppress everywhere else.
-      if (
-        (a === "ymin" || a === "ymax") &&
-        draw !== "ribbon" &&
-        draw !== "range"
-      )
-        return false;
-      // ribbon + range take pos2min/pos2max for the secondary axis — plain
-      // `y` is NOT in their `aesthetics()` list, so ggsql's validate_mapping
-      // errors on it. Drop a stale `y` mapping rather than pass through.
-      if (a === "y" && (draw === "ribbon" || draw === "range")) return false;
-      return true;
-    }).map((a) => `${l.mappings[a]} AS ${a}`);
-    const mappingClause = dataMaps.length
-      ? ` MAPPING ${dataMaps.join(", ")}`
-      : "";
-    drawLines.push(
-      `DRAW ${emittedDraw}${mappingClause}${layerSettingClause(l.settings)}${layerFilterClause(l.settings?.filter)}${layerPartitionClause(l.partition)}`,
-    );
+    const r = layerDrawClause(l, columns, sharedMappings);
+    if (!r) return;
+    if (r.draw === "pie") anyPie = true;
+    drawLines.push(r.clause);
   });
   drawLines.push(...customsAt(layers.length));
 

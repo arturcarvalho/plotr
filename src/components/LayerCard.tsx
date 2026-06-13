@@ -1,35 +1,25 @@
 import { chartLabel } from "../lib/buildQuery";
 import { ChartIcon } from "./ChartIcon";
-import { EyeIcon, EyeSlashIcon } from "./icons";
 
 interface Props {
   resolvedDraw: string | null;
   selected: boolean;
   disabled: boolean;
   onToggle: () => void;
-  onRemove: () => void;
-  onToggleDisabled: () => void;
 }
 
-export function LayerCard({
-  resolvedDraw,
-  selected,
-  disabled,
-  onToggle,
-  onRemove,
-  onToggleDisabled,
-}: Props) {
+export function LayerCard({ resolvedDraw, selected, disabled, onToggle }: Props) {
   const title = resolvedDraw ? chartLabel(resolvedDraw) : "Chart";
 
   return (
-    <div className="group relative mb-1.5">
+    <div className="mb-1.5">
       <button
         type="button"
         onClick={onToggle}
         title={title}
         aria-label={title}
         className={[
-          "flex h-10 w-10 items-center justify-center rounded transition-colors",
+          "flex h-10 w-10 cursor-grab items-center justify-center rounded transition-colors active:cursor-grabbing",
           selected
             ? "bg-stone-300 text-stone-900 hover:bg-stone-400"
             : "border border-stone-200 bg-white text-stone-700 hover:bg-stone-100",
@@ -41,24 +31,6 @@ export function LayerCard({
         ) : (
           <PlayIcon />
         )}
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove layer"
-        title="Remove layer"
-        className="pointer-events-none absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-stone-300 bg-white font-mono text-xs leading-none text-stone-500 opacity-0 shadow-sm transition-opacity hover:border-red-300 hover:bg-red-50 hover:text-red-700 group-hover:pointer-events-auto group-hover:opacity-100"
-      >
-        ×
-      </button>
-      <button
-        type="button"
-        onClick={onToggleDisabled}
-        aria-label={disabled ? "Enable layer" : "Disable layer"}
-        title={disabled ? "Enable layer" : "Disable layer"}
-        className="pointer-events-none absolute -left-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-stone-300 bg-white text-stone-500 opacity-0 shadow-sm transition-opacity hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 group-hover:pointer-events-auto group-hover:opacity-100"
-      >
-        {disabled ? <EyeSlashIcon /> : <EyeIcon />}
       </button>
     </div>
   );
@@ -77,4 +49,3 @@ function PlayIcon() {
     </svg>
   );
 }
-

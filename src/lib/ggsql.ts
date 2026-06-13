@@ -1,7 +1,8 @@
 import init, { GgsqlContext } from "./ggsql-wasm/ggsql_wasm.js";
 import wasmUrl from "./ggsql-wasm/ggsql_wasm_bg.wasm?url";
+import { unquote } from "./tableData";
 
-interface SqlResult {
+export interface SqlResult {
   columns: string[];
   rows: string[][];
   total_rows: number;
@@ -89,13 +90,6 @@ function classify(values: (string | null | undefined)[]): ColumnKind {
   }
 
   return "string";
-}
-
-function unquote(v: string): string {
-  if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
-    return v.slice(1, -1);
-  }
-  return v;
 }
 
 export const ggsql = new GgsqlManager();

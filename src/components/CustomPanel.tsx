@@ -2,15 +2,18 @@ import { useRef, useState } from "react";
 import type { CustomLayer } from "../lib/buildQuery";
 import { crossesBoundary, useDragging } from "../lib/dragHelpers";
 import { DeleteBanner } from "./DeleteBanner";
+import { PanelActions } from "./PanelActions";
 
 type CustomPatch = Partial<Pick<CustomLayer, "ggsql">>;
 
 interface Props {
   custom: CustomLayer;
   onChange: (patch: CustomPatch) => void;
+  onRemove: () => void;
+  onToggleDisabled: () => void;
 }
 
-export function CustomPanel({ custom, onChange }: Props) {
+export function CustomPanel({ custom, onChange, onRemove, onToggleDisabled }: Props) {
   const asideRef = useRef<HTMLElement>(null);
   const dragging = useDragging();
   const [hovered, setHovered] = useState(false);
@@ -28,10 +31,16 @@ export function CustomPanel({ custom, onChange }: Props) {
     >
       <DeleteBanner show={dragging && !hovered} />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-y border-r border-stone-300 bg-white">
-        <header className="flex h-[52px] items-center border-b border-stone-200 px-3">
-          <span className="font-mono text-sm font-semibold text-stone-800">
+        <header className="group flex h-[52px] items-center border-b border-stone-200 pl-3 pr-2">
+          <span className="min-w-0 flex-1 truncate font-mono text-sm font-semibold text-stone-800">
             Custom
           </span>
+          <PanelActions
+            kind="custom layer"
+            disabled={custom.disabled === true}
+            onRemove={onRemove}
+            onToggleDisabled={onToggleDisabled}
+          />
         </header>
         <div className="space-y-2 p-3">
           <label className="block">

@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 import Select, {
   components as RSComponents,
   type GroupBase,
@@ -17,6 +10,8 @@ import Select, {
 import type { Aes, LayerSettings, ScaleSettings } from "../lib/buildQuery";
 import { colorKeys } from "../lib/buildQuery";
 import { ClearButton } from "./ClearButton";
+import { NumberField } from "./NumberField";
+import { Switch } from "./Switch";
 import { CloseIcon } from "./icons";
 import { useDebouncedInput } from "../lib/useDebouncedInput";
 import {
@@ -44,6 +39,9 @@ type MappingKind = "fixed" | "discrete" | "continuous";
 
 interface Props {
   aes: Aes;
+  /** Resolved geom of the layer — picks the per-geom default for the fixed
+   *  opacity / size number inputs (opacity defaults differ by geom). */
+  resolvedDraw: string | null;
   settings: LayerSettings;
   /** Chart-level scale settings (axis format/breaks + fill/stroke palettes).
    *  Shared across every layer; the palette tabs + axis fields read/write here
@@ -240,6 +238,7 @@ const paletteSelectStyles: StylesConfig<
 
 export function MappingPanel({
   aes,
+  resolvedDraw,
   settings,
   scales,
   mappingKind,
@@ -247,6 +246,7 @@ export function MappingPanel({
   onChangeScales,
   onClose,
 }: Props) {
+  const geom = resolvedDraw ?? "";
   const aesLabel =
     aes === "facet_col"
       ? "Top axis"
@@ -259,30 +259,10 @@ export function MappingPanel({
             : cap(aes);
 
   const isColor = aes === "fill" || aes === "stroke";
-
-  // Tab state lives here so the TabStrip can be anchored at the bottom of the
-  // card while the active tab body scrolls in the middle region.
-  const [tab, setTab] = useState<MappingKind>(mappingKind);
-  useEffect(() => {
-    if (isColor) setTab(mappingKind);
-  }, [mappingKind, isColor]);
-
-  let fixedSet = false;
-  let discreteSet = false;
-  let continuousSet = false;
-  if (isColor) {
-    const {
-      fixed: fixedKey,
-      no: noKey,
-      discrete: discreteKey,
-      continuous: continuousKey,
-      discreteRev: discreteRevKey,
-      continuousRev: continuousRevKey,
-    } = colorKeys(aes);
-    fixedSet = !!settings[fixedKey] || !!settings[noKey];
-    discreteSet = !!scales[discreteKey] || !!scales[discreteRevKey];
-    continuousSet = !!scales[continuousKey] || !!scales[continuousRevKey];
-  }
+  // The colour mode follows the mapped column's kind — no manual switch.
+  const colorMode: MappingKind = mappingKind;
+  const noKey = isColor ? colorKeys(aes).no : "noFill";
+  const noValue = isColor && !!settings[noKey];
 
   return (
     <aside className="flex h-full w-[280px] shrink-0 flex-col bg-app-chrome">
@@ -306,7 +286,7 @@ export function MappingPanel({
           {isColor && (
             <ColorAestheticPanel
               aes={aes}
-              tab={tab}
+              mode={colorMode}
               settings={settings}
               scales={scales}
               onChangeSettings={onChangeSettings}
@@ -315,12 +295,11 @@ export function MappingPanel({
           )}
           {aes === "opacity" && (
             <div className="space-y-3 p-3">
-              <NumberSlider
+              <NumberField
+                geom={geom}
+                settingKey="opacity"
                 label="Fixed opacity"
                 value={settings.opacity ?? null}
-                min={0}
-                max={1}
-                step={0.05}
                 onChange={(v) =>
                   onChangeSettings({ ...settings, opacity: v ?? undefined })
                 }
@@ -329,12 +308,11 @@ export function MappingPanel({
           )}
           {aes === "size" && (
             <div className="space-y-3 p-3">
-              <NumberSlider
+              <NumberField
+                geom={geom}
+                settingKey="size"
                 label="Fixed size"
                 value={settings.size ?? null}
-                min={1}
-                max={10}
-                step={0.5}
                 onChange={(v) =>
                   onChangeSettings({ ...settings, size: v ?? undefined })
                 }
@@ -373,18 +351,43 @@ export function MappingPanel({
         </div>
 
         {isColor && (
-          <TabStrip
-            tab={tab}
-            onChange={setTab}
-            modified={{
-              fixed: fixedSet,
-              discrete: discreteSet,
-              continuous: continuousSet,
-            }}
+          <NoColorFooter
+            aes={aes}
+            checked={noValue}
+            onChange={(v) =>
+              onChangeSettings({ ...settings, [noKey]: v || undefined })
+            }
           />
         )}
       </div>
     </aside>
+  );
+}
+
+// Pinned footer shared by all three colour modes: the No fill / No line switch
+// (overrides the palette / fixed colour above).
+function NoColorFooter({
+  aes,
+  checked,
+  onChange,
+}: {
+  aes: "fill" | "stroke";
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const label = aes === "fill" ? "No fill color" : "No line color";
+  return (
+    <div className="flex shrink-0 items-center justify-between border-t border-stone-200 bg-stone-50 px-3 py-2.5">
+      <div className="min-w-0">
+        <div className="font-mono text-sm font-semibold text-stone-800">
+          {label}
+        </div>
+        <div className="font-mono text-[10px] text-stone-500">
+          Overrides settings above
+        </div>
+      </div>
+      <Switch checked={checked} onChange={onChange} label={label} />
+    </div>
   );
 }
 
@@ -394,14 +397,14 @@ export function MappingPanel({
 
 function ColorAestheticPanel({
   aes,
-  tab,
+  mode,
   settings,
   scales,
   onChangeSettings,
   onChangeScales,
 }: {
   aes: "fill" | "stroke";
-  tab: MappingKind;
+  mode: MappingKind;
   settings: LayerSettings;
   scales: ScaleSettings;
   onChangeSettings: (next: LayerSettings) => void;
@@ -414,126 +417,61 @@ function ColorAestheticPanel({
     discreteRev: discreteRevKey,
     continuousRev: continuousRevKey,
   } = colorKeys(aes);
+  const paletteKey = mode === "continuous" ? continuousKey : discreteKey;
+  const reverseKey = mode === "continuous" ? continuousRevKey : discreteRevKey;
+  const reverse = scales[reverseKey] ?? false;
 
   return (
-    <div className="flex flex-col">
-      {tab === "fixed" && (
-        <FixedTab
+    <div className="space-y-3 p-3">
+      <ModeLabel mode={mode} />
+      {mode === "fixed" && (
+        <ConstantContent
           aes={aes}
           settings={settings}
           onChangeSettings={onChangeSettings}
         />
       )}
-      {tab === "discrete" && (
-        <DiscreteTab
-          value={scales[discreteKey] ?? null}
-          onChange={(v) =>
-            onChangeScales({ ...scales, [discreteKey]: v ?? undefined })
-          }
-          reverse={scales[discreteRevKey] ?? false}
-          onToggleReverse={(v) =>
-            onChangeScales({ ...scales, [discreteRevKey]: v || undefined })
-          }
-        />
-      )}
-      {tab === "continuous" && (
-        <ContinuousTab
-          value={scales[continuousKey] ?? null}
-          onChange={(v) =>
-            onChangeScales({ ...scales, [continuousKey]: v ?? undefined })
-          }
-          reverse={scales[continuousRevKey] ?? false}
-          onToggleReverse={(v) =>
-            onChangeScales({ ...scales, [continuousRevKey]: v || undefined })
-          }
-        />
+      {mode !== "fixed" && (
+        <>
+          <PaletteContent value={scales[paletteKey] ?? null} mode={mode} reverse={reverse}
+            onChange={(v) =>
+              onChangeScales({ ...scales, [paletteKey]: v ?? undefined })
+            }
+          />
+          <div className="border-t border-stone-200 pt-3">
+            <label className="flex items-center justify-between font-mono text-sm text-stone-800">
+              <span>Reverse palette</span>
+              <Switch
+                checked={reverse}
+                label="Reverse palette"
+                onChange={(v) =>
+                  onChangeScales({ ...scales, [reverseKey]: v || undefined })
+                }
+              />
+            </label>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function TabStrip({
-  tab,
-  onChange,
-  modified,
-}: {
-  tab: MappingKind;
-  onChange: (t: MappingKind) => void;
-  modified: { fixed: boolean; discrete: boolean; continuous: boolean };
-}) {
-  const dot = (active: boolean, isModified: boolean) =>
-    isModified
-      ? "bg-sky-500 group-hover:bg-sky-700"
-      : active
-        ? "bg-stone-700 group-hover:bg-stone-900"
-        : "bg-stone-300 group-hover:bg-stone-500";
+function ModeLabel({ mode }: { mode: MappingKind }) {
   return (
-    <div className="flex shrink-0 items-center justify-center border-t border-stone-200 bg-white">
-      <TabDot
-        title="Settings"
-        align="end"
-        active={tab === "fixed"}
-        cls={dot(tab === "fixed", modified.fixed)}
-        onClick={() => onChange("fixed")}
-      />
-      <TabDot
-        title="Palette (discrete)"
-        align="center"
-        active={tab === "discrete"}
-        cls={dot(tab === "discrete", modified.discrete)}
-        onClick={() => onChange("discrete")}
-      />
-      <TabDot
-        title="Palette (Continuous)"
-        align="start"
-        active={tab === "continuous"}
-        cls={dot(tab === "continuous", modified.continuous)}
-        onClick={() => onChange("continuous")}
-      />
+    <div className="font-mono text-[11px] uppercase tracking-wide text-stone-500">
+      {mode === "fixed" ? (
+        "Constant color"
+      ) : (
+        <>
+          Palette <span className="text-stone-400">·</span>{" "}
+          {mode === "discrete" ? "Discrete" : "Continuous"}
+        </>
+      )}
     </div>
   );
 }
 
-function TabDot({
-  title,
-  align,
-  active,
-  cls,
-  onClick,
-}: {
-  title: string;
-  align: "start" | "center" | "end";
-  active: boolean;
-  cls: string;
-  onClick: () => void;
-}) {
-  const justify =
-    align === "start"
-      ? "justify-start pl-2"
-      : align === "end"
-        ? "justify-end pr-2"
-        : "justify-center";
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
-      onClick={onClick}
-      className={`group flex h-7 w-14 items-center ${justify}`}
-    >
-      <span
-        className={[
-          "h-3 w-3 rounded-full ring-offset-1 transition-colors",
-          active ? "ring-1 ring-stone-700" : "",
-          cls,
-        ].join(" ")}
-      />
-    </button>
-  );
-}
-
-function FixedTab({
+function ConstantContent({
   aes,
   settings,
   onChangeSettings,
@@ -542,29 +480,14 @@ function FixedTab({
   settings: LayerSettings;
   onChangeSettings: (next: LayerSettings) => void;
 }) {
-  const { fixed: fixedKey, no: noKey } = colorKeys(aes);
+  const { fixed: fixedKey } = colorKeys(aes);
   const value = settings[fixedKey] ?? null;
-  const noValue = !!settings[noKey];
   const setValue = (v: string | null) =>
     onChangeSettings({ ...settings, [fixedKey]: v ?? undefined });
-  const setNo = (v: boolean) =>
-    onChangeSettings({ ...settings, [noKey]: v || undefined });
-  const clearAll = () =>
-    onChangeSettings({
-      ...settings,
-      [fixedKey]: undefined,
-      [noKey]: undefined,
-    });
 
   return (
-    <div className="space-y-3 p-3">
-      <div className="font-mono text-sm font-semibold text-stone-800">
-        Settings
-      </div>
-      <p className="font-mono text-[11px] text-stone-500">
-        Applied when no variable is mapped.
-      </p>
-      <div className="grid grid-cols-5 gap-1.5">
+    <div className="space-y-3">
+      <div className="grid grid-cols-5 gap-2">
         {GGSQL10.map((c) => (
           <button
             key={c}
@@ -573,23 +496,43 @@ function FixedTab({
             aria-label={c}
             title={c}
             className={[
-              "h-7 w-full rounded border-2 transition-shadow",
-              value === c ? "border-stone-800" : "border-stone-200",
+              "h-9 w-full rounded-md ring-offset-1 transition-shadow",
+              value === c ? "ring-2 ring-sky-500" : "ring-1 ring-stone-200",
             ].join(" ")}
             style={{ background: c }}
           />
         ))}
       </div>
       <CustomColorField value={value} onChange={setValue} />
-      <ToggleField
-        label={aes === "fill" ? "No fill color" : "No line color"}
-        checked={noValue}
-        onChange={setNo}
+    </div>
+  );
+}
+
+// Strip + status line + searchable palette dropdown for the discrete /
+// continuous modes. Reverse + no-fill live outside this block.
+function PaletteContent({
+  value,
+  mode,
+  reverse,
+  onChange,
+}: {
+  value: string | null;
+  mode: "discrete" | "continuous";
+  reverse: boolean;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <PaletteStatusLine
+        value={value}
+        defaultName={mode === "continuous" ? DEFAULT_CONTINUOUS : DEFAULT_DISCRETE}
+        kind={mode}
+        reverse={reverse}
       />
-      {(value !== null || noValue) && (
-        <div className="flex justify-end">
-          <ClearButton onClick={clearAll} />
-        </div>
+      {mode === "continuous" ? (
+        <ContinuousSelect value={value} onChange={onChange} />
+      ) : (
+        <DiscreteSelect value={value} onChange={onChange} />
       )}
     </div>
   );
@@ -631,51 +574,27 @@ function PaletteStatusLine({
       swatchCss = gradientCss(stops);
     }
   }
+  // Discrete: "<name> default · N colors". Continuous: "<name> <category>"
+  // (category suppressed when it equals the name) + "default" for the default.
+  const meta: string[] = [];
+  if (kind === "discrete") {
+    if (isDefault) meta.push("default");
+    const colors = DISCRETE_PALETTES.find((p) => p.name === effective)?.colors;
+    if (colors) meta.push(`· ${colors.length} colors`);
+  } else {
+    const cat = CONTINUOUS_PALETTES.find((p) => p.name === effective)?.category;
+    if (cat && cat !== effective) meta.push(cat);
+    if (isDefault) meta.push("default");
+  }
   return (
     <div className="space-y-1">
       <div className="h-4 rounded" style={{ background: swatchCss }} />
-      <div className="font-mono text-[11px] text-stone-700">
-        {effective}
-        {isDefault && <span className="text-stone-400"> (default)</span>}
+      <div className="font-mono text-[11px]">
+        <span className="font-semibold text-stone-800">{effective}</span>
+        {meta.length > 0 && (
+          <span className="text-stone-400"> {meta.join(" ")}</span>
+        )}
       </div>
-    </div>
-  );
-}
-
-function DiscreteTab({
-  value,
-  onChange,
-  reverse,
-  onToggleReverse,
-}: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-  reverse: boolean;
-  onToggleReverse: (v: boolean) => void;
-}) {
-  return (
-    <div className="space-y-3 p-3">
-      <div className="font-mono text-sm font-semibold text-stone-800">
-        Palette (discrete)
-      </div>
-      <PaletteStatusLine
-        value={value}
-        defaultName={DEFAULT_DISCRETE}
-        kind="discrete"
-        reverse={reverse}
-      />
-      <DiscreteSelect value={value} onChange={onChange} />
-      <ToggleField label="Reverse" checked={reverse} onChange={onToggleReverse} />
-      {(value !== null || reverse) && (
-        <div className="flex justify-end">
-          <ClearButton
-            onClick={() => {
-              onChange(null);
-              onToggleReverse(false);
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -707,44 +626,6 @@ function DiscreteSelect({
         classNamePrefix="palette-select"
       />
     </PalettePreviewContext.Provider>
-  );
-}
-
-function ContinuousTab({
-  value,
-  onChange,
-  reverse,
-  onToggleReverse,
-}: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-  reverse: boolean;
-  onToggleReverse: (v: boolean) => void;
-}) {
-  return (
-    <div className="space-y-3 p-3">
-      <div className="font-mono text-sm font-semibold text-stone-800">
-        Palette (Continuous)
-      </div>
-      <PaletteStatusLine
-        value={value}
-        defaultName={DEFAULT_CONTINUOUS}
-        kind="continuous"
-        reverse={reverse}
-      />
-      <ContinuousSelect value={value} onChange={onChange} />
-      <ToggleField label="Reverse" checked={reverse} onChange={onToggleReverse} />
-      {(value !== null || reverse) && (
-        <div className="flex justify-end">
-          <ClearButton
-            onClick={() => {
-              onChange(null);
-              onToggleReverse(false);
-            }}
-          />
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -784,27 +665,6 @@ function ContinuousSelect({
 // ────────────────────────────────────────────────────────────────────────────
 
 
-function ToggleField({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2 font-mono text-xs text-stone-700">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      {label}
-    </label>
-  );
-}
-
 function CustomColorField({
   value,
   onChange,
@@ -821,7 +681,7 @@ function CustomColorField({
         type="color"
         value={isHex ? (value as string) : "#000000"}
         onChange={(e) => onChange(e.target.value)}
-        className="h-7 w-9 cursor-pointer rounded border border-stone-300"
+        className="h-11 w-12 shrink-0 cursor-pointer rounded-md border border-stone-300"
         aria-label="Pick a custom colour"
       />
       <input
@@ -829,55 +689,11 @@ function CustomColorField({
         placeholder="#hex / name / rgb(…)"
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="flex-1 rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
+        className="flex-1 rounded-md border border-stone-300 bg-white px-3 font-mono text-xs text-stone-800 focus:border-sky-400 focus:outline-none"
       />
     </div>
   );
 }
-
-function NumberSlider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: number | null;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number | null) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 flex items-center justify-between font-mono text-xs text-stone-700">
-        <span>{label}</span>
-        <span className="text-[10px] text-stone-500">
-          {value === null ? "default" : value}
-        </span>
-      </span>
-      <div className="flex items-center gap-2">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value ?? ""}
-          onChange={(e) =>
-            onChange(e.target.value === "" ? null : Number(e.target.value))
-          }
-          className="flex-1"
-        />
-        {value !== null && (
-          <ClearButton onClick={() => onChange(null)} />
-        )}
-      </div>
-    </label>
-  );
-}
-
 
 /** Per-axis break values. Emits `SCALE x SETTING breaks => (<values>)` (or `y`)
  *  to limit the visible axis ticks. Free-form passthrough — the user types the

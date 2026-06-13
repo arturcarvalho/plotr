@@ -2,12 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import vegaEmbed from "vega-embed";
 import { Warn } from "vega";
-import { ggsql, type ColumnInfo, type ColumnKind } from "./lib/ggsql";
+import {
+  ggsql,
+  type ColumnInfo,
+  type ColumnKind,
+  type SqlResult,
+} from "./lib/ggsql";
 import {
   AESTHETICS,
   AUTO,
   buildQuery,
   FACETS,
+  layerDrawClause,
+  missingRequiredWarnings,
   UNIVERSAL_AESTHETICS,
   type Aes,
   type CustomLayer,
@@ -17,6 +24,7 @@ import {
   type ProjectSettings,
   type ScaleSettings,
 } from "./lib/buildQuery";
+import { convertLayerToCustom, reorderStrip } from "./lib/layerOrder";
 import {
   columnAxisKind,
   compatibleDraws,
@@ -43,6 +51,7 @@ import { BuildPanel } from "./components/BuildPanel";
 import { ChartPanel } from "./components/ChartPanel";
 import { ChartTypePanel } from "./components/ChartTypePanel";
 import { DataPanel } from "./components/DataPanel";
+import { DataTablePanel } from "./components/DataTablePanel";
 import { GGSQLPanel } from "./components/GGSQLPanel";
 import { VegaSpecPanel } from "./components/VegaSpecPanel";
 import { CustomPanel } from "./components/CustomPanel";
@@ -86,6 +95,8 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
+  // First 100 rows of the active table, for the bottom Data tab.
+  const [dataPreview, setDataPreview] = useState<SqlResult | null>(null);
   // Additive in-memory cache of column name → kind. Seeded each time a table's
   // schema lands so the no-data card can still render type badges after the
   // user resets the file. Never pruned mid-session; lost only on full page
@@ -379,12 +390,16 @@ export default function App() {
   useEffect(() => {
     if (!activeTable) {
       setColumns([]);
+      setDataPreview(null);
       return;
     }
     if (!ready) return; // wait for wasm before introspecting
     try {
       const next = ggsql.describeColumns(activeTable);
       setColumns(next);
+      // execute_sql caps results at 100 rows and reports the table's real
+      // total via total_rows/truncated — exactly the Data-tab preview shape.
+      setDataPreview(ggsql.executeSql(`SELECT * FROM ${activeTable}`));
       // Seed the additive kind cache so the no-data card can still render
       // type badges if the user later resets the file.
       setColumnKindsCache((prev) => {
@@ -396,6 +411,7 @@ export default function App() {
     } catch (e) {
       setErrors((prev) => [`Failed to inspect "${activeTable}": ${e}`, ...prev]);
       setColumns([]);
+      setDataPreview(null);
     }
   }, [activeTable, ready]);
 
@@ -446,6 +462,20 @@ export default function App() {
     }
     return map;
   }, [layers, columns, sharedMappings]);
+
+  // Build-time warnings for layers skipped from emission (missing geom-
+  // required aesthetics). Derived synchronously — not gated by the chart
+  // debounce — so the amber badge tracks the dropzones' (missing) hint.
+  // Vega warnings stay in the render-coupled `warnings` state; the two merge
+  // only at the consumption sites.
+  const layerWarnings = useMemo(
+    () => missingRequiredWarnings(layers, columns, sharedMappings),
+    [layers, columns, sharedMappings],
+  );
+  const allWarnings = useMemo(
+    () => [...layerWarnings, ...warnings],
+    [layerWarnings, warnings],
+  );
 
   // Auto-reset settings when a layer's resolved draw shifts under it
   // (e.g. scatter → bar after the user swaps the X column from continuous to
@@ -509,6 +539,9 @@ export default function App() {
       setErrors((prev) =>
         prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
       );
+      // Vega warnings are tied to the render that produced them; with no
+      // query they'd linger next to layer-skip warnings.
+      setWarnings([]);
       return;
     }
 
@@ -904,6 +937,41 @@ export default function App() {
     );
   };
 
+  // Drag-reorder of the build strip: move card `activeId` to `overId`'s slot.
+  // Layer array order + labels/custom positions re-derive in the pure helper;
+  // reference equality lets unchanged arrays skip their state set.
+  const onReorderStrip = (activeId: string, overId: string) => {
+    const next = reorderStrip(layers, labels, customLayers, activeId, overId);
+    if (next.layers !== layers) setLayers(next.layers);
+    if (next.labels !== labels) setLabels(next.labels);
+    if (next.customLayers !== customLayers) setCustomLayers(next.customLayers);
+  };
+
+  // Replace a chart layer with a custom layer holding its emitted DRAW clause,
+  // in the same strip slot, and open the new custom panel. A lone pie layer
+  // converts to its literal `DRAW bar …` emission — the chart-level
+  // `PROJECT TO polar` follows the remaining pie layers, so it goes cartesian.
+  const onConvertLayerToCustom = (id: string) => {
+    const src = layers.find((l) => l.id === id);
+    if (!src) return;
+    const r = layerDrawClause(src, columns, sharedMappings);
+    if (!r) return;
+    const next = convertLayerToCustom(
+      layers,
+      labels,
+      customLayers,
+      id,
+      newId(),
+      r.clause,
+    );
+    if (!next) return;
+    setLayers(next.layers);
+    setLabels(next.labels);
+    setCustomLayers(next.customLayers);
+    setActivePanel({ kind: "custom", customId: next.custom.id });
+    setSecondaryPanel(null);
+  };
+
   // File-only reset: drops the loaded CSV from IndexedDB and clears the
   // active table. Chart config (layers / labels / settings) is preserved
   // so the user can re-upload a compatible CSV and keep their layout.
@@ -1068,12 +1136,7 @@ export default function App() {
                   onAddLayer={onAddLayer}
                   onAddLabels={onAddLabels}
                   onAddCustom={onAddCustom}
-                  onRemoveLayer={onRemoveLayer}
-                  onRemoveLabels={onRemoveLabels}
-                  onRemoveCustom={onRemoveCustom}
-                  onToggleLayerDisabled={onToggleLayerDisabled}
-                  onToggleLabelsDisabled={onToggleLabelsDisabled}
-                  onToggleCustomDisabled={onToggleCustomDisabled}
+                  onReorder={onReorderStrip}
                 />
                 {activeLabels && activePanel?.kind === "labels" ? (
                   <LabelsPanel
@@ -1081,12 +1144,20 @@ export default function App() {
                     onChange={(patch) =>
                       onUpdateLabels(activePanel.labelsId, patch)
                     }
+                    onRemove={() => onRemoveLabels(activePanel.labelsId)}
+                    onToggleDisabled={() =>
+                      onToggleLabelsDisabled(activePanel.labelsId)
+                    }
                   />
                 ) : activeCustom && activePanel?.kind === "custom" ? (
                   <CustomPanel
                     custom={activeCustom}
                     onChange={(patch) =>
                       onUpdateCustom(activePanel.customId, patch)
+                    }
+                    onRemove={() => onRemoveCustom(activePanel.customId)}
+                    onToggleDisabled={() =>
+                      onToggleCustomDisabled(activePanel.customId)
                     }
                   />
                 ) : activePanel?.kind === "shared" ? (
@@ -1123,6 +1194,15 @@ export default function App() {
                     onRemovePartition={(col) =>
                       onRemovePartition(panelLayer.id, col)
                     }
+                    onRemove={() => onRemoveLayer(panelLayer.id)}
+                    onToggleDisabled={() =>
+                      onToggleLayerDisabled(panelLayer.id)
+                    }
+                    canConvert={
+                      layerDrawClause(panelLayer, columns, sharedMappings) !==
+                      null
+                    }
+                    onConvert={() => onConvertLayerToCustom(panelLayer.id)}
                   />
                 ) : (
                   <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
@@ -1144,6 +1224,7 @@ export default function App() {
                 ) : secondaryPanel?.kind === "mapping" && panelLayer ? (
                   <MappingPanel
                     aes={secondaryPanel.aes}
+                    resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
                     settings={panelLayer.settings ?? {}}
                     scales={scales}
                     mappingKind={resolveMappingKind(
@@ -1185,6 +1266,7 @@ export default function App() {
                     hasError={errors.length > 0}
                     errorText={chartErrorText}
                     unrecoverable={wasmUnrecoverable}
+                    warnings={layerWarnings}
                     onReload={() => window.location.reload()}
                   />
                 </div>
@@ -1200,11 +1282,14 @@ export default function App() {
                     tab={bottomTab}
                     onTabChange={setBottomTab}
                     errorCount={errors.length}
-                    warningCount={warnings.length}
+                    warningCount={allWarnings.length}
                     problems={
-                      <ProblemsPanel errors={errors} warnings={warnings} />
+                      <ProblemsPanel errors={errors} warnings={allWarnings} />
                     }
                     ggsql={<GGSQLPanel query={query} />}
+                    data={
+                      <DataTablePanel preview={dataPreview} columns={columns} />
+                    }
                     vegaLite={<VegaSpecPanel spec={vegaSpec} />}
                   />
                 </div>

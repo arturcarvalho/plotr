@@ -1,16 +1,16 @@
 // Shared inline SVG icons used across multiple components. All inherit color
 // via `currentColor`, so callers control color with text-* classes.
 
-// Eye / eye-slash — the layer-card "disabled" toggle (11×11).
+// Eye / eye-slash — the panel-header "hide/show" toggle (16×16).
 export function EyeIcon() {
   return (
     <svg
-      width="11"
-      height="11"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
@@ -24,12 +24,12 @@ export function EyeIcon() {
 export function EyeSlashIcon() {
   return (
     <svg
-      width="11"
-      height="11"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
@@ -38,6 +38,49 @@ export function EyeSlashIcon() {
       <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
       <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
       <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
+// Trash can — the panel-header "remove" action (16×16).
+export function TrashIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
+// Angle brackets — the panel-header "convert to custom ggsql" action (16×16).
+export function CodeIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="m9 8-4 4 4 4" />
+      <path d="m15 8 4 4-4 4" />
     </svg>
   );
 }
