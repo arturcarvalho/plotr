@@ -8,6 +8,7 @@ import {
   defaultDraw,
   drawRequirements,
   resolveDraw,
+  resolveMappingKind,
 } from "./autoChart";
 
 const COLUMNS: ColumnInfo[] = [
@@ -41,6 +42,27 @@ describe("columnAxisKind", () => {
   });
   it("maps date → time", () => {
     expect(columnAxisKind(COLUMNS, "born_at")).toBe("time");
+  });
+});
+
+describe("resolveMappingKind", () => {
+  it("returns fixed for undefined", () => {
+    expect(resolveMappingKind(COLUMNS, undefined)).toBe("fixed");
+  });
+  it("returns fixed for unknown column", () => {
+    expect(resolveMappingKind(COLUMNS, "nope")).toBe("fixed");
+  });
+  it("maps numeric → continuous", () => {
+    expect(resolveMappingKind(COLUMNS, "bill_len")).toBe("continuous");
+  });
+  it("maps date → continuous", () => {
+    expect(resolveMappingKind(COLUMNS, "born_at")).toBe("continuous");
+  });
+  it("maps string → discrete", () => {
+    expect(resolveMappingKind(COLUMNS, "species")).toBe("discrete");
+  });
+  it("maps bool → discrete", () => {
+    expect(resolveMappingKind(COLUMNS, "alive")).toBe("discrete");
   });
 });
 

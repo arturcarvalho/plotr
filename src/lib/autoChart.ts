@@ -92,19 +92,29 @@ const RULES: Rule[] = [
   { x: "empty", y: "time", draw: "rule", role: "compatible" },
 ];
 
+// Three "kind" vocabularies describe a column at different layers, narrowing as
+// they move toward the UI. Both converters below take `(columns, name)`:
+//   • ColumnKind ("numeric"|"string"|"bool"|"date") — the raw data type, from
+//     ggsql's `describeColumns` (see ggsql.ts).
+//   • AxisKind ("continuous"|"discrete"|"time"|"empty") — how a column behaves
+//     on an axis; ColumnKind → AxisKind is `columnAxisKind`.
+//   • MappingKind ("fixed"|"discrete"|"continuous") — the mapping panel's colour
+//     mode; ColumnKind → MappingKind is `resolveMappingKind` (time folds into
+//     continuous, no column → fixed).
 export function resolveMappingKind(
-  name: string | undefined,
   columns: ColumnInfo[],
+  name: string | undefined,
 ): "fixed" | "discrete" | "continuous" {
-  if (!name) return "fixed";
-  const c = columns.find((c) => c.name === name);
-  if (!c) return "fixed";
-  switch (c.kind) {
-    case "string":
-    case "bool":
+  // Mapping settings collapse the axis-kind vocabulary: a column either varies
+  // the channel (continuous/time → continuous, discrete → discrete) or there's
+  // no column at all (empty → fixed).
+  switch (columnAxisKind(columns, name)) {
+    case "empty":
+      return "fixed";
+    case "discrete":
       return "discrete";
-    case "numeric":
-    case "date":
+    case "continuous":
+    case "time":
       return "continuous";
   }
 }

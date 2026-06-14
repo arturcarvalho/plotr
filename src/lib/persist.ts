@@ -5,17 +5,17 @@ import {
   FACETS,
   HJUST_VALUES,
   VJUST_VALUES,
+  isMapped,
   type Aes,
   type CustomLayer,
-  type Hjust,
   type LabelsLayer,
   type Layer,
   type LayerSettings,
   type ProjectSettings,
   type ScaleSettings,
-  type Vjust,
 } from "./buildQuery";
 import type { ColumnKind } from "./ggsql";
+import { newId } from "./id";
 
 const VALID_KINDS: ReadonlySet<string> = new Set<string>([
   "numeric",
@@ -77,11 +77,14 @@ const VALID_AES: ReadonlySet<string> = new Set<string>([
   ...FACETS,
 ]);
 
-const newId = () => Math.random().toString(36).slice(2, 9);
 const isNonEmptyString = (v: unknown): v is string =>
   typeof v === "string" && v.length > 0;
 const isMeaningful = (v: unknown): boolean =>
   v !== undefined && v !== null && v !== "";
+// A real numeric value — guards against the `NaN` that survives JSON round-trips
+// as `null` → `Number(null)` etc. and the `typeof` widening of `unknown`.
+const isFiniteNumber = (v: unknown): v is number =>
+  typeof v === "number" && !Number.isNaN(v);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Encoders (long → short, drop empty)
@@ -198,61 +201,96 @@ function encodeMappings(
   const out: Partial<Record<Aes, string>> = {};
   for (const k of [...AESTHETICS, ...FACETS]) {
     const v = m[k as Aes];
-    if (typeof v === "string" && v.length > 0) out[k as Aes] = v;
+    if (isMapped(v)) out[k as Aes] = v;
   }
   return out;
+}
+
+type SettingKind = "num" | "str" | "bool" | "flag";
+
+interface SettingField {
+  /** Key on the in-memory `LayerSettings`. */
+  long: keyof LayerSettings;
+  /** Short key in the serialized payload. */
+  short: keyof ShortLayerSettings;
+  kind: SettingKind;
+  /** `str` only: encode drops empty strings (`""`). */
+  nonEmpty?: boolean;
+  /** `str` only: decode rejects values outside this allow-list. */
+  allowed?: readonly string[];
+}
+
+// One row per persisted `LayerSettings` field — the single source of truth that
+// `encodeLayerSettings` / `decodeLayerSettings` both walk, so a new setting is
+// one row instead of two hand-mirrored `if` blocks. `offset` (nested `{x,y}`) is
+// the lone exception, handled explicitly in both directions.
+const SETTING_FIELDS: readonly SettingField[] = [
+  { long: "width", short: "w", kind: "num" },
+  { long: "position", short: "pos", kind: "str" },
+  { long: "fill", short: "f", kind: "str", nonEmpty: true },
+  { long: "stroke", short: "k", kind: "str", nonEmpty: true },
+  { long: "linewidth", short: "lw", kind: "num" },
+  { long: "orientation", short: "or", kind: "str" },
+  { long: "bandwidth", short: "bw", kind: "num" },
+  { long: "adjust", short: "adj", kind: "num" },
+  { long: "kernel", short: "krn", kind: "str" },
+  { long: "method", short: "mth", kind: "str" },
+  { long: "side", short: "sd", kind: "str" },
+  { long: "tails", short: "tl", kind: "num" },
+  { long: "bins", short: "bn", kind: "num" },
+  { long: "binwidth", short: "bnw", kind: "num" },
+  { long: "closed", short: "cl", kind: "str" },
+  { long: "outliers", short: "ot", kind: "bool" },
+  { long: "coef", short: "cf", kind: "num" },
+  { long: "italic", short: "it", kind: "bool" },
+  { long: "hjust", short: "hj", kind: "str", allowed: HJUST_VALUES },
+  { long: "vjust", short: "vj", kind: "str", allowed: VJUST_VALUES },
+  { long: "rotation", short: "rt", kind: "num" },
+  { long: "format", short: "fmt", kind: "str", nonEmpty: true },
+  { long: "filter", short: "flt", kind: "str", nonEmpty: true },
+  { long: "slope", short: "slp", kind: "num" },
+  { long: "opacity", short: "o", kind: "num" },
+  { long: "size", short: "z", kind: "num" },
+  { long: "noFill", short: "nf", kind: "flag" },
+  { long: "noStroke", short: "ns", kind: "flag" },
+];
+
+function encodeOffset(
+  offset: LayerSettings["offset"],
+): { x?: number; y?: number } | undefined {
+  if (!offset || typeof offset !== "object") return undefined;
+  const o: { x?: number; y?: number } = {};
+  if (isFiniteNumber(offset.x)) o.x = offset.x;
+  if (isFiniteNumber(offset.y)) o.y = offset.y;
+  return o.x !== undefined || o.y !== undefined ? o : undefined;
 }
 
 function encodeLayerSettings(
   s: LayerSettings | undefined,
 ): ShortLayerSettings | undefined {
   if (!s) return undefined;
-  const out: ShortLayerSettings = {};
-  if (typeof s.width === "number" && !Number.isNaN(s.width)) out.w = s.width;
-  if (typeof s.position === "string") out.pos = s.position;
-  if (isNonEmptyString(s.fill)) out.f = s.fill;
-  if (isNonEmptyString(s.stroke)) out.k = s.stroke;
-  if (typeof s.linewidth === "number" && !Number.isNaN(s.linewidth))
-    out.lw = s.linewidth;
-  if (typeof s.orientation === "string") out.or = s.orientation;
-  if (typeof s.bandwidth === "number" && !Number.isNaN(s.bandwidth))
-    out.bw = s.bandwidth;
-  if (typeof s.adjust === "number" && !Number.isNaN(s.adjust))
-    out.adj = s.adjust;
-  if (typeof s.kernel === "string") out.krn = s.kernel;
-  if (typeof s.method === "string") out.mth = s.method;
-  if (typeof s.side === "string") out.sd = s.side;
-  if (typeof s.tails === "number" && !Number.isNaN(s.tails)) out.tl = s.tails;
-  if (typeof s.bins === "number" && !Number.isNaN(s.bins)) out.bn = s.bins;
-  if (typeof s.binwidth === "number" && !Number.isNaN(s.binwidth))
-    out.bnw = s.binwidth;
-  if (typeof s.closed === "string") out.cl = s.closed;
-  if (typeof s.outliers === "boolean") out.ot = s.outliers;
-  if (typeof s.coef === "number" && !Number.isNaN(s.coef)) out.cf = s.coef;
-  if (typeof s.italic === "boolean") out.it = s.italic;
-  if (typeof s.hjust === "string") out.hj = s.hjust;
-  if (typeof s.vjust === "string") out.vj = s.vjust;
-  if (s.offset && typeof s.offset === "object") {
-    const o: { x?: number; y?: number } = {};
-    if (typeof s.offset.x === "number" && !Number.isNaN(s.offset.x)) {
-      o.x = s.offset.x;
+  const out: Record<string, unknown> = {};
+  for (const f of SETTING_FIELDS) {
+    const v = s[f.long];
+    switch (f.kind) {
+      case "num":
+        if (isFiniteNumber(v)) out[f.short] = v;
+        break;
+      case "str":
+        if (f.nonEmpty ? isNonEmptyString(v) : typeof v === "string")
+          out[f.short] = v;
+        break;
+      case "bool":
+        if (typeof v === "boolean") out[f.short] = v;
+        break;
+      case "flag":
+        if (v === true) out[f.short] = true;
+        break;
     }
-    if (typeof s.offset.y === "number" && !Number.isNaN(s.offset.y)) {
-      o.y = s.offset.y;
-    }
-    if (o.x !== undefined || o.y !== undefined) out.of = o;
   }
-  if (typeof s.rotation === "number" && !Number.isNaN(s.rotation))
-    out.rt = s.rotation;
-  if (typeof s.format === "string" && s.format.length > 0) out.fmt = s.format;
-  if (typeof s.filter === "string" && s.filter.length > 0) out.flt = s.filter;
-  if (typeof s.slope === "number" && !Number.isNaN(s.slope))
-    out.slp = s.slope;
-  if (typeof s.opacity === "number" && !Number.isNaN(s.opacity)) out.o = s.opacity;
-  if (typeof s.size === "number" && !Number.isNaN(s.size)) out.z = s.size;
-  if (s.noFill === true) out.nf = true;
-  if (s.noStroke === true) out.ns = true;
-  return Object.keys(out).length > 0 ? out : undefined;
+  const of = encodeOffset(s.offset);
+  if (of) out.of = of;
+  return Object.keys(out).length > 0 ? (out as ShortLayerSettings) : undefined;
 }
 
 function encodeScales(s: ScaleSettings): ShortScales {
@@ -329,7 +367,7 @@ function encodeLabels(l: LabelsLayer): ShortLabels {
 
 function encodeProject(p: ProjectSettings): ShortProject {
   const out: ShortProject = {};
-  if (typeof p.ratio === "number" && !Number.isNaN(p.ratio)) out.r = p.ratio;
+  if (isFiniteNumber(p.ratio)) out.r = p.ratio;
   if (p.clip === false) out.c = false;
   return out;
 }
@@ -368,7 +406,7 @@ function decodeMappings(raw: unknown): Partial<Record<Aes, string>> {
   const out: Partial<Record<Aes, string>> = {};
   for (const [k, v] of Object.entries(r)) {
     if (!VALID_AES.has(k)) continue;
-    if (!isNonEmptyString(v)) continue;
+    if (!isMapped(v)) continue;
     out[k as Aes] = v;
   }
   return out;
@@ -377,59 +415,35 @@ function decodeMappings(raw: unknown): Partial<Record<Aes, string>> {
 function decodeLayerSettings(raw: unknown): LayerSettings | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
-  const out: LayerSettings = {};
-  if (typeof r.w === "number" && !Number.isNaN(r.w)) out.width = r.w;
-  if (typeof r.pos === "string") {
-    out.position = r.pos as LayerSettings["position"];
-  }
-  if (typeof r.f === "string") out.fill = r.f;
-  if (typeof r.k === "string") out.stroke = r.k;
-  if (typeof r.lw === "number" && !Number.isNaN(r.lw)) out.linewidth = r.lw;
-  if (typeof r.or === "string") {
-    out.orientation = r.or as LayerSettings["orientation"];
-  }
-  if (typeof r.bw === "number" && !Number.isNaN(r.bw)) out.bandwidth = r.bw;
-  if (typeof r.adj === "number" && !Number.isNaN(r.adj)) out.adjust = r.adj;
-  if (typeof r.krn === "string") {
-    out.kernel = r.krn as LayerSettings["kernel"];
-  }
-  if (typeof r.mth === "string") {
-    out.method = r.mth as LayerSettings["method"];
-  }
-  if (typeof r.sd === "string") {
-    out.side = r.sd as LayerSettings["side"];
-  }
-  if (typeof r.tl === "number" && !Number.isNaN(r.tl)) out.tails = r.tl;
-  if (typeof r.bn === "number" && !Number.isNaN(r.bn)) out.bins = r.bn;
-  if (typeof r.bnw === "number" && !Number.isNaN(r.bnw)) out.binwidth = r.bnw;
-  if (typeof r.cl === "string") {
-    out.closed = r.cl as LayerSettings["closed"];
-  }
-  if (typeof r.ot === "boolean") out.outliers = r.ot;
-  if (typeof r.cf === "number" && !Number.isNaN(r.cf)) out.coef = r.cf;
-  if (typeof r.it === "boolean") out.italic = r.it;
-  if (typeof r.hj === "string" && (HJUST_VALUES as readonly string[]).includes(r.hj)) {
-    out.hjust = r.hj as Hjust;
-  }
-  if (typeof r.vj === "string" && (VJUST_VALUES as readonly string[]).includes(r.vj)) {
-    out.vjust = r.vj as Vjust;
+  const out: Record<string, unknown> = {};
+  for (const f of SETTING_FIELDS) {
+    const v = r[f.short];
+    switch (f.kind) {
+      case "num":
+        if (isFiniteNumber(v)) out[f.long] = v;
+        break;
+      case "str":
+        // `allowed` rejects stale/bogus enum values (e.g. legacy numeric
+        // hjust/vjust, which already fail the `typeof` guard).
+        if (typeof v === "string" && (!f.allowed || f.allowed.includes(v)))
+          out[f.long] = v;
+        break;
+      case "bool":
+        if (typeof v === "boolean") out[f.long] = v;
+        break;
+      case "flag":
+        if (v === true) out[f.long] = true;
+        break;
+    }
   }
   if (r.of && typeof r.of === "object" && !Array.isArray(r.of)) {
-    const raw = r.of as { x?: unknown; y?: unknown };
+    const ro = r.of as { x?: unknown; y?: unknown };
     const o: { x?: number; y?: number } = {};
-    if (typeof raw.x === "number" && !Number.isNaN(raw.x)) o.x = raw.x;
-    if (typeof raw.y === "number" && !Number.isNaN(raw.y)) o.y = raw.y;
+    if (isFiniteNumber(ro.x)) o.x = ro.x;
+    if (isFiniteNumber(ro.y)) o.y = ro.y;
     if (o.x !== undefined || o.y !== undefined) out.offset = o;
   }
-  if (typeof r.rt === "number" && !Number.isNaN(r.rt)) out.rotation = r.rt;
-  if (typeof r.fmt === "string") out.format = r.fmt;
-  if (typeof r.flt === "string") out.filter = r.flt;
-  if (typeof r.slp === "number" && !Number.isNaN(r.slp)) out.slope = r.slp;
-  if (typeof r.o === "number" && !Number.isNaN(r.o)) out.opacity = r.o;
-  if (typeof r.z === "number" && !Number.isNaN(r.z)) out.size = r.z;
-  if (r.nf === true) out.noFill = true;
-  if (r.ns === true) out.noStroke = true;
-  return Object.keys(out).length > 0 ? out : undefined;
+  return Object.keys(out).length > 0 ? (out as LayerSettings) : undefined;
 }
 
 function decodeLayer(raw: unknown): Layer | null {
@@ -492,7 +506,7 @@ function decodeProject(raw: unknown): ProjectSettings {
   if (!raw || typeof raw !== "object") return {};
   const r = raw as Record<string, unknown>;
   const out: ProjectSettings = {};
-  if (typeof r.r === "number" && !Number.isNaN(r.r)) out.ratio = r.r;
+  if (isFiniteNumber(r.r)) out.ratio = r.r;
   if (typeof r.c === "boolean") out.clip = r.c;
   return out;
 }

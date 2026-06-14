@@ -70,6 +70,7 @@ import { NoDataCard, Viz } from "./components/Viz";
 import { ProblemsPanel } from "./components/ProblemsPanel";
 import { TutorialOverlay } from "./components/Tutorial";
 import { isSeen, markSeen } from "./lib/tutorial";
+import { newId } from "./lib/id";
 import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 
 // Debounce window for chart re-renders. Rapid input (slider drags, text typing)
@@ -79,8 +80,6 @@ import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 // especially with multi-layer queries. Lower = quicker post-pause render, more
 // renders; higher = slower preview but cheaper. Tune here when the feel is off.
 const CHART_DEBOUNCE_MS = 200;
-
-const newId = () => Math.random().toString(36).slice(2, 9);
 
 const initialLayer = (): Layer => ({
   id: newId(),
@@ -759,6 +758,12 @@ export default function App() {
   const onChangeSettings = (id: string, settings: LayerSettings) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, settings } : l)));
 
+  // Step 3 (the final tutorial step) completes when a variable gets mapped.
+  const completeTutorial = () => {
+    markSeen();
+    setTutorialStep(null);
+  };
+
   const onMap = (id: string, aes: Aes, col: string | undefined) => {
     if (id === SHARED_MAPPINGS_KEY) {
       setSharedMappings((cur) => {
@@ -767,10 +772,7 @@ export default function App() {
         delete next[aes];
         return next;
       });
-      if (col && tutorialStep === 3) {
-        markSeen();
-        setTutorialStep(null);
-      }
+      if (col && tutorialStep === 3) completeTutorial();
       return;
     }
     setLayers((ls) =>
@@ -785,10 +787,7 @@ export default function App() {
         return { ...l, draw, mappings };
       }),
     );
-    if (col && tutorialStep === 3) {
-      markSeen();
-      setTutorialStep(null);
-    }
+    if (col && tutorialStep === 3) completeTutorial();
   };
 
   const onDrop = (
@@ -812,10 +811,7 @@ export default function App() {
         return mappings === l.mappings ? l : { ...l, draw, mappings };
       }),
     );
-    if (tutorialStep === 3) {
-      markSeen();
-      setTutorialStep(null);
-    }
+    if (tutorialStep === 3) completeTutorial();
     setSharedMappings((cur) => {
       let next = cur;
       if (src && src.layerId === SHARED_MAPPINGS_KEY) {
@@ -1241,9 +1237,9 @@ export default function App() {
                     settings={panelLayer.settings ?? {}}
                     scales={scales}
                     mappingKind={resolveMappingKind(
+                      columns,
                       panelLayer.mappings[secondaryPanel.aes] ??
                         sharedMappings[secondaryPanel.aes],
-                      columns,
                     )}
                     onChangeSettings={(s) =>
                       onChangeSettings(panelLayer.id, s)

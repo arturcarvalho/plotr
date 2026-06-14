@@ -43,6 +43,13 @@ const GEOM_SPECIFIC_REQUIRED: Record<string, readonly Aes[]> = {
   range: ["ymin", "ymax"],
 };
 
+/** The aesthetic-mapping contract: a channel is mapped only when its value is a
+ *  non-empty string. `""` and `undefined` both mean "unset" (a dropzone the user
+ *  never filled or cleared). Single source of truth for the query emitter, the
+ *  persist codec, and the config summary so the rule can't drift. */
+export const isMapped = (v: unknown): v is string =>
+  typeof v === "string" && v.length > 0;
+
 /** Returns the subset of `GEOM_SPECIFIC_REQUIRED[draw]` that the layer has
  *  not yet mapped. `null`/`undefined`/unknown draws return an empty array.
  *  Used by `ChartPanel` to drive the amber-dashed dropzone + `(missing)`
@@ -53,10 +60,7 @@ export function computeMissingRequired(
   mappings: Partial<Record<Aes, string>>,
 ): Aes[] {
   const required = GEOM_SPECIFIC_REQUIRED[draw ?? ""] ?? [];
-  return required.filter((a) => {
-    const v = mappings[a];
-    return v === undefined || v === "";
-  });
+  return required.filter((a) => !isMapped(mappings[a]));
 }
 export const FACETS = ["facet_col", "facet_row"] as const;
 
@@ -438,9 +442,9 @@ function layerEmissionState(
   sharedMappings?: Partial<Record<Aes, string>>,
 ): { draw: string; missing: Aes[] } | null {
   const sharedHasAesthetic = sharedMappings
-    ? UNIVERSAL_AESTHETICS.some((a) => sharedMappings[a])
+    ? UNIVERSAL_AESTHETICS.some((a) => isMapped(sharedMappings[a]))
     : false;
-  const hasOwn = UNIVERSAL_AESTHETICS.some((a) => layer.mappings[a]);
+  const hasOwn = UNIVERSAL_AESTHETICS.some((a) => isMapped(layer.mappings[a]));
   if (!hasOwn && !sharedHasAesthetic) return null;
   const draw = resolveDraw(layer, columns, sharedMappings);
   if (!draw) return null;
@@ -502,7 +506,7 @@ export function layerDrawClause(
   // pie is a plotr token; ggsql draws it as a polar bar.
   const emittedDraw = draw === "pie" ? "bar" : draw;
   const dataMaps = AESTHETICS.filter((a) => {
-    if (!layer.mappings[a]) return false;
+    if (!isMapped(layer.mappings[a])) return false;
     if (a === "fill" && layer.settings?.noFill) return false;
     if (a === "stroke" && layer.settings?.noStroke) return false;
     // `label` is text-only; suppress for any other geom.
@@ -585,7 +589,7 @@ export function buildQuery(
   ];
 
   const sharedPairs = sharedMappings
-    ? UNIVERSAL_AESTHETICS.filter((a) => sharedMappings[a]).map(
+    ? UNIVERSAL_AESTHETICS.filter((a) => isMapped(sharedMappings[a])).map(
         (a) => `${sharedMappings[a]} AS ${a}`,
       )
     : [];
