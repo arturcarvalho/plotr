@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  dropAllRenderErrors,
+  dropStaleChartErrors,
   isChartError,
   isUnrecoverableError,
   isWasmCrashError,
@@ -122,5 +124,51 @@ describe("isChartError", () => {
 
   it("rejects suffix / mid-string occurrences (prefix-only)", () => {
     expect(isChartError("Wrapped: Chart error: foo")).toBe(false);
+  });
+});
+
+// These two `Array.filter` predicates (true = keep) name the two ways the
+// render effect prunes stale messages. Centralising them keeps the subtle
+// "drop recoverable chart errors but keep the wasm crash" vs "drop both"
+// distinction a name instead of a boolean to re-parse at each call site.
+describe("dropStaleChartErrors", () => {
+  it("drops a recoverable 'Chart error: <body>' (stale validation message)", () => {
+    expect(dropStaleChartErrors("Chart error: bad mapping")).toBe(false);
+  });
+
+  it("keeps the bare unrecoverable 'Chart error:' sentinel", () => {
+    expect(dropStaleChartErrors("Chart error:")).toBe(true);
+  });
+
+  it("keeps an unrecoverable 'ggsql-wasm crashed' message", () => {
+    expect(
+      dropStaleChartErrors("ggsql-wasm crashed. Reload the page to recover."),
+    ).toBe(true);
+  });
+
+  it("keeps non-chart errors (CSV / inspect failures, warnings)", () => {
+    expect(dropStaleChartErrors("Failed to inspect 'foo': bar")).toBe(true);
+    expect(dropStaleChartErrors("warning: something")).toBe(true);
+  });
+});
+
+describe("dropAllRenderErrors", () => {
+  it("drops a recoverable 'Chart error: <body>'", () => {
+    expect(dropAllRenderErrors("Chart error: bad mapping")).toBe(false);
+  });
+
+  it("drops the bare 'Chart error:' sentinel", () => {
+    expect(dropAllRenderErrors("Chart error:")).toBe(false);
+  });
+
+  it("drops an unrecoverable 'ggsql-wasm crashed' message", () => {
+    expect(
+      dropAllRenderErrors("ggsql-wasm crashed. Reload the page to recover."),
+    ).toBe(false);
+  });
+
+  it("keeps non-render errors (CSV / inspect failures, warnings)", () => {
+    expect(dropAllRenderErrors("Failed to inspect 'foo': bar")).toBe(true);
+    expect(dropAllRenderErrors("warning: something")).toBe(true);
   });
 });

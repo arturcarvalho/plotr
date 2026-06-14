@@ -1,5 +1,5 @@
 /* @ts-self-types="./ggsql_wasm.d.ts" */
-import { convert_csv, convert_parquet } from './snippets/ggsql-wasm-ba9ba8aa7eb18b40/library/dist/lib.js';
+import { convert_csv, convert_parquet } from './snippets/ggsql-wasm-d2feae725d330de5/library/dist/lib.js';
 
 
 /**
@@ -230,11 +230,11 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).call(getObject(arg1), getObject(arg2));
             return addHeapObject(ret);
         }, arguments); },
-        __wbg_convert_csv_0a6d4e89533f7db0: function() { return handleError(function (arg0, arg1) {
+        __wbg_convert_csv_3a65fd11d3558722: function() { return handleError(function (arg0, arg1) {
             const ret = convert_csv(getArrayU8FromWasm0(arg0, arg1));
             return addHeapObject(ret);
         }, arguments); },
-        __wbg_convert_parquet_e448c0f02c4a0570: function() { return handleError(function (arg0, arg1) {
+        __wbg_convert_parquet_3a97254971dcb271: function() { return handleError(function (arg0, arg1) {
             const ret = convert_parquet(getArrayU8FromWasm0(arg0, arg1));
             return addHeapObject(ret);
         }, arguments); },
@@ -342,7 +342,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_7476(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_7474(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -435,7 +435,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 308, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_7404);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_7402);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000002: function(arg0) {
@@ -467,10 +467,10 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_7404(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_7402(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_7404(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_7402(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -481,8 +481,8 @@ function __wasm_bindgen_func_elem_7404(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_7476(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_7476(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_7474(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_7474(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
 const GgsqlContextFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -827,22 +827,6 @@ async function __wbg_init(module_or_path) {
     const { instance, module } = await __wbg_load(await module_or_path, imports);
 
     return __wbg_finalize_init(instance, module);
-}
-
-// PLOTR PATCH: expose a reset hook so we can force a full wasm re-init after
-// a runtime crash (memory access OOB / Rust panic). Re-applied on every
-// ggsql-wasm bump per MANUAL.md's bumping procedure.
-export function __plotr_reset() {
-    wasm = undefined;
-    wasmModule = undefined;
-    cachedDataViewMemory0 = null;
-    cachedFloat64ArrayMemory0 = null;
-    cachedUint8ArrayMemory0 = null;
-    // Rebuild the JS-side GC heap to its initial layout so slot indices
-    // start fresh for the new wasm instance.
-    heap = new Array(1024).fill(undefined);
-    heap.push(undefined, null, true, false);
-    heap_next = heap.length;
 }
 
 export { initSync, __wbg_init as default };

@@ -5,7 +5,7 @@ Reference of the fixed values ggsql falls back to when an aesthetic is not mappe
 - **Source:** [`posit-dev/ggsql`](https://github.com/posit-dev/ggsql) v0.3.2 — commit [`6bdf2a9`](https://github.com/posit-dev/ggsql/tree/6bdf2a9ae13a97210458b42c5a1a63821da9a70f) (tagged 2026-05-05).
 - **Default mapping** = the constant ggsql uses for an aesthetic when no `<col> AS <aes>` mapping exists for it.
 - **Default setting** = the value of a non-aesthetic geom parameter (e.g. `bar.width`, `smooth.method`, `histogram.bins`).
-- **Caveat:** plotr currently bundles ggsql-wasm v0.3.1. Most defaults below are unchanged between v0.3.1 and v0.3.2, but verify against `src/lib/ggsql-wasm/` if a value matters for your use case.
+- **Caveat:** plotr bundles ggsql-wasm v0.3.3. All defaults below were verified unchanged between v0.3.1 and v0.3.3 (geom sources compared at both tags).
 
 Scope: only the 14 ggsql geoms exposed by plotr's UI. `pie` is a plotr-only token emitted as `DRAW bar` + `PROJECT TO polar` — it inherits `bar`'s defaults verbatim. Excluded geoms (defined in ggsql but not surfaced by plotr): `arrow`, `path`, `polygon`, `segment`, `spatial`.
 

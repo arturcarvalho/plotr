@@ -1,4 +1,3 @@
-import { useRef, useState } from "react";
 import {
   chartLabel,
   computeMissingRequired,
@@ -6,11 +5,11 @@ import {
   type Layer,
   type LayerSettings,
 } from "../lib/buildQuery";
-import { crossesBoundary, useDragging } from "../lib/dragHelpers";
 import { useDebouncedInput } from "../lib/useDebouncedInput";
 import { ClearButton } from "./ClearButton";
-import { DeleteBanner } from "./DeleteBanner";
+import { DraggablePanel } from "./DraggablePanel";
 import { MappingFields } from "./MappingFields";
+import { PanelActions } from "./PanelActions";
 
 interface Props {
   layer: Layer;
@@ -28,6 +27,11 @@ interface Props {
   /** Append / remove a PARTITION BY column for this layer. */
   onAddPartition: (col: string) => void;
   onRemovePartition: (col: string) => void;
+  onRemove: () => void;
+  onToggleDisabled: () => void;
+  /** False while the layer wouldn't emit a DRAW clause (nothing mapped). */
+  canConvert: boolean;
+  onConvert: () => void;
 }
 
 export function ChartPanel({
@@ -41,11 +45,12 @@ export function ChartPanel({
   onChangeSettings,
   onAddPartition,
   onRemovePartition,
+  onRemove,
+  onToggleDisabled,
+  canConvert,
+  onConvert,
 }: Props) {
   const title = resolvedDraw ? chartLabel(resolvedDraw) : "Chart";
-  const asideRef = useRef<HTMLElement>(null);
-  const dragging = useDragging();
-  const [hovered, setHovered] = useState(false);
 
   // Geom-specific aesthetics that ggsql needs but the layer hasn't mapped yet.
   // MappingFields uses this to render the matching dropzones with an amber-
@@ -53,60 +58,52 @@ export function ChartPanel({
   const missingRequired = computeMissingRequired(resolvedDraw, layer.mappings);
 
   return (
-    <aside
-      ref={asideRef}
-      className="relative flex h-full w-[280px] shrink-0 flex-col bg-app-chrome"
-      onDragStart={() => setHovered(true)}
-      onDragEnter={(e) => {
-        if (crossesBoundary(asideRef.current, e)) setHovered(true);
-      }}
-      onDragLeave={(e) => {
-        if (crossesBoundary(asideRef.current, e)) setHovered(false);
-      }}
-    >
-      <DeleteBanner show={dragging && !hovered} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-y border-r border-stone-300 bg-white">
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          aria-label="Open chart settings"
-          title="Open chart settings"
-          className="group flex h-[52px] w-full shrink-0 items-stretch border-b border-stone-200 transition-colors hover:bg-stone-100"
-        >
-          <span className="flex flex-1 items-center px-3 text-left font-mono text-sm font-semibold text-stone-800">
-            {title}
-          </span>
-          <span className="flex w-10 shrink-0 items-center justify-center text-stone-400 group-hover:text-stone-700">
-            <ChevronRightIcon />
-          </span>
-        </button>
+    <DraggablePanel>
+      {/* The whole header is the settings affordance; the action buttons
+          stop propagation so only they don't bubble into it. */}
+      <header
+        onClick={onOpenSettings}
+        title="Open chart settings"
+        className="group flex h-[52px] w-full shrink-0 cursor-pointer items-center border-b border-stone-200 pl-3 pr-2 transition-colors hover:bg-stone-100"
+      >
+        <span className="min-w-0 flex-1 truncate font-mono text-sm font-semibold text-stone-800">
+          {title}
+        </span>
+        <PanelActions
+          kind="layer"
+          disabled={layer.disabled === true}
+          onRemove={onRemove}
+          onToggleDisabled={onToggleDisabled}
+          convert={{ enabled: canConvert, onConvert }}
+          onOpenSettings={onOpenSettings}
+        />
+      </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-3 pl-3">
-          <MappingFields
-            mappings={layer.mappings}
-            sourceId={layer.id}
-            resolvedDraw={resolvedDraw}
-            missingRequired={missingRequired}
-            openMappingAes={openMappingAes}
-            onMap={onMap}
-            onDrop={onDrop}
-            onToggleSettings={onToggleMappingSettings}
-            partition={layer.partition}
-            onAddPartition={onAddPartition}
-            onRemovePartition={onRemovePartition}
-          />
-          <FilterField
-            value={layer.settings?.filter ?? ""}
-            onChange={(v) => {
-              const next: LayerSettings = { ...layer.settings };
-              if (v) next.filter = v;
-              else delete next.filter;
-              onChangeSettings(next);
-            }}
-          />
-        </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-3 pl-3">
+        <MappingFields
+          mappings={layer.mappings}
+          sourceId={layer.id}
+          resolvedDraw={resolvedDraw}
+          missingRequired={missingRequired}
+          openMappingAes={openMappingAes}
+          onMap={onMap}
+          onDrop={onDrop}
+          onToggleSettings={onToggleMappingSettings}
+          partition={layer.partition}
+          onAddPartition={onAddPartition}
+          onRemovePartition={onRemovePartition}
+        />
+        <FilterField
+          value={layer.settings?.filter ?? ""}
+          onChange={(v) => {
+            const next: LayerSettings = { ...layer.settings };
+            if (v) next.filter = v;
+            else delete next.filter;
+            onChangeSettings(next);
+          }}
+        />
       </div>
-    </aside>
+    </DraggablePanel>
   );
 }
 
@@ -147,21 +144,4 @@ function FilterField({
   );
 }
 
-function ChevronRightIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
 

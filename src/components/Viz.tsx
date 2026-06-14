@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import type { ColumnKind } from "../lib/ggsql";
 import { ColumnKindBadge } from "./ColumnKindBadge";
 
-export interface NoDataVariable {
+interface NoDataVariable {
   name: string;
   kind: ColumnKind | null;
 }
@@ -14,14 +14,41 @@ interface Props {
   /** Unrecoverable wasm-crash state — adds a "Reload page" action (a location
    *  reload is the only path back once ggsql-wasm is corrupted past recovery). */
   unrecoverable?: boolean;
+  /** Skipped-layer warnings, shown as an amber banner floating at the top of
+   *  the chart while the remaining layers keep rendering underneath. Hidden
+   *  while a chart error is shown (the error box owns that spot; the warnings
+   *  stay visible in the Problems pane). */
+  warnings?: string[];
   onReload: () => void;
 }
 
 export const Viz = forwardRef<HTMLDivElement, Props>(
-  ({ hasError, errorText, unrecoverable, onReload }, ref) => {
+  ({ hasError, errorText, unrecoverable, warnings, onReload }, ref) => {
     return (
       <div className="relative h-full w-full overflow-hidden">
         <div ref={ref} className="absolute inset-0 overflow-hidden p-4" />
+        {!hasError && warnings && warnings.length > 0 && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-4">
+            <div className="pointer-events-auto max-w-full rounded-md border border-amber-300 bg-amber-50 px-4 py-3 font-mono text-xs text-amber-800 shadow-sm">
+              <div className="mb-1.5 flex items-center gap-2 font-semibold">
+                <WarningIcon />
+                <span>
+                  {warnings.length > 1
+                    ? "Layers not shown yet"
+                    : "Layer not shown yet"}
+                </span>
+              </div>
+              {warnings.map((w) => (
+                <div
+                  key={w}
+                  className="break-words leading-relaxed text-amber-700"
+                >
+                  {w}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {hasError && (
           <div className="absolute inset-0 flex items-start justify-center overflow-auto p-4">
             <div className="max-w-full rounded-md border border-red-300 bg-red-50 px-4 py-3 font-mono text-xs text-red-800 shadow-sm">
@@ -65,6 +92,26 @@ export const Viz = forwardRef<HTMLDivElement, Props>(
   },
 );
 Viz.displayName = "Viz";
+
+function WarningIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12" y2="17" />
+    </svg>
+  );
+}
 
 /**
  * "No data selected" card rendered at the section level when the chart is

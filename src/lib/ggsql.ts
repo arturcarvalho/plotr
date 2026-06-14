@@ -1,8 +1,6 @@
-import init, {
-  GgsqlContext,
-  __plotr_reset,
-} from "./ggsql-wasm/ggsql_wasm.js";
+import init, { GgsqlContext } from "./ggsql-wasm/ggsql_wasm.js";
 import wasmUrl from "./ggsql-wasm/ggsql_wasm_bg.wasm?url";
+import { unquote } from "./tableData";
 
 export interface SqlResult {
   columns: string[];
@@ -30,20 +28,6 @@ class GgsqlManager {
       await this.context.register_builtin_datasets();
     })();
     return this.initPromise;
-  }
-
-  /** Tear the wasm runtime down and rebuild it from scratch. A plain
-   *  `initialize()` would short-circuit on the cached resolved promise, so we
-   *  null the context + promise and call `__plotr_reset()` — a patched export
-   *  on `ggsql_wasm.js` (see MANUAL.md bumping section) — to clear the bindgen
-   *  module's private `wasm`/`wasmModule` refs, then re-run `init(...)` to
-   *  re-fetch and re-instantiate the wasm bytes. The next `new GgsqlContext()`
-   *  then allocates in clean wasm memory. */
-  async reinitialize(): Promise<void> {
-    this.context = null;
-    this.initPromise = null;
-    __plotr_reset();
-    await this.initialize();
   }
 
   private ctx(): GgsqlContext {
@@ -106,13 +90,6 @@ function classify(values: (string | null | undefined)[]): ColumnKind {
   }
 
   return "string";
-}
-
-function unquote(v: string): string {
-  if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
-    return v.slice(1, -1);
-  }
-  return v;
 }
 
 export const ggsql = new GgsqlManager();

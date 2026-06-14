@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import type { ColumnInfo, ColumnKind } from "../lib/ggsql";
+import type { ColumnInfo } from "../lib/ggsql";
+import { columnAxisKind } from "../lib/autoChart";
 import { ColumnKindBadge } from "./ColumnKindBadge";
 import { HeaderMenu } from "./HeaderMenu";
 
@@ -13,13 +14,6 @@ interface Props {
   onResetFile: () => void;
   onClearChart: () => void;
 }
-
-const TYPE_LABEL: Record<ColumnKind, string> = {
-  numeric: "num",
-  string: "str",
-  bool: "bool",
-  date: "date",
-};
 
 function sanitiseTableName(filename: string): string {
   return filename
@@ -48,12 +42,15 @@ export function DataPanel({
   };
 
   if (activeTable) {
-    const nonNumeric = columns
-      .filter((c) => c.kind !== "numeric")
-      .sort((a, b) => a.name.localeCompare(b.name));
-    const numeric = columns
-      .filter((c) => c.kind === "numeric")
-      .sort((a, b) => a.name.localeCompare(b.name));
+    // Group by the same axis-kind mapping the chart logic uses
+    // (string/bool → discrete, numeric → continuous, date → time).
+    const group = (kind: "discrete" | "continuous" | "time") =>
+      columns
+        .filter((c) => columnAxisKind(columns, c.name) === kind)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    const discrete = group("discrete");
+    const continuous = group("continuous");
+    const time = group("time");
 
     return (
       <aside className="flex h-full w-[252px] shrink-0 flex-col bg-app-chrome">
@@ -79,8 +76,12 @@ export function DataPanel({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto py-2">
-              <Section title="Variables" rows={nonNumeric} />
-              <Section divider={nonNumeric.length > 0} rows={numeric} />
+              <div className="px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-stone-500">
+                Variables
+              </div>
+              <Section title="Discrete" rows={discrete} />
+              <Section title="Continuous" rows={continuous} />
+              <Section title="Time" rows={time} />
             </div>
         </div>
       </aside>
@@ -200,25 +201,15 @@ function BrandStrip({
   );
 }
 
-function Section({
-  title,
-  divider,
-  rows,
-}: {
-  title?: string;
-  divider?: boolean;
-  rows: ColumnInfo[];
-}) {
+/** One axis-kind group in the variable list: a faint sub-header (under the
+ *  main VARIABLES heading) plus its draggable column rows. */
+function Section({ title, rows }: { title: string; rows: ColumnInfo[] }) {
   if (rows.length === 0) return null;
   return (
     <div className="mb-2">
-      {title ? (
-        <div className="px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-stone-500">
-          {title}
-        </div>
-      ) : divider ? (
-        <div className="my-1 border-t border-stone-200" />
-      ) : null}
+      <div className="px-3 pb-0.5 pt-2 font-mono text-[10px] uppercase tracking-wide text-stone-400">
+        {title}
+      </div>
       <ul>
         {rows.map((col) => (
           <li
@@ -236,9 +227,6 @@ function Section({
               title={col.name}
             >
               {col.name}
-            </span>
-            <span className="font-mono text-[10px] text-stone-400">
-              {TYPE_LABEL[col.kind]}
             </span>
           </li>
         ))}

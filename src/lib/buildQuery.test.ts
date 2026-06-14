@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  layerDrawClause,
+  missingRequiredWarnings,
   buildQuery,
   CHART_LABELS,
   computeMissingRequired,
   DRAW_TYPES,
+  pruneColorScales,
   type Aes,
   type CustomLayer,
   type Layer,
@@ -1388,6 +1391,80 @@ describe("buildQuery emits SCALE for palettes (chart-level scales)", () => {
   });
 });
 
+describe("pruneColorScales (drop the unreachable opposite-kind palette slot)", () => {
+  it("discrete mode drops the continuous palette + reverse slots", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteDiscrete: "set1",
+      fillPaletteContinuous: "viridis",
+      fillPaletteContinuousReverse: true,
+    });
+    expect(out).toEqual({ fillPaletteDiscrete: "set1" });
+  });
+
+  it("continuous mode drops the discrete palette + reverse slots", () => {
+    const out = pruneColorScales("fill", "continuous", {
+      fillPaletteContinuous: "viridis",
+      fillPaletteDiscrete: "set1",
+      fillPaletteDiscreteReverse: true,
+    });
+    expect(out).toEqual({ fillPaletteContinuous: "viridis" });
+  });
+
+  it("keeps the active-kind palette + reverse untouched", () => {
+    const scales: ScaleSettings = {
+      fillPaletteDiscrete: "set1",
+      fillPaletteDiscreteReverse: true,
+    };
+    expect(pruneColorScales("fill", "discrete", scales)).toEqual(scales);
+  });
+
+  it("only prunes the requested aesthetic — stroke slots survive a fill prune", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteContinuous: "viridis",
+      strokePaletteContinuous: "magma",
+    });
+    expect(out).toEqual({ strokePaletteContinuous: "magma" });
+  });
+
+  it("prunes the stroke aesthetic independently", () => {
+    const out = pruneColorScales("stroke", "continuous", {
+      strokePaletteDiscrete: "tableau10",
+      strokePaletteDiscreteReverse: true,
+      strokePaletteContinuous: "magma",
+    });
+    expect(out).toEqual({ strokePaletteContinuous: "magma" });
+  });
+
+  it("fixed mode preserves both palettes (transient unmap must not lose a pick)", () => {
+    const scales: ScaleSettings = {
+      fillPaletteDiscrete: "set1",
+      fillPaletteContinuous: "viridis",
+    };
+    expect(pruneColorScales("fill", "fixed", scales)).toEqual(scales);
+  });
+
+  it("drops a reverse-only opposite slot (no palette set)", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteContinuousReverse: true,
+    });
+    expect(out).toEqual({});
+  });
+
+  it("returns the SAME reference when nothing needs pruning (skips a no-op write)", () => {
+    const scales: ScaleSettings = { fillPaletteDiscrete: "set1" };
+    expect(pruneColorScales("fill", "discrete", scales)).toBe(scales);
+  });
+
+  it("leaves axis scale settings alone", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteContinuous: "viridis",
+      xFormat: "{:num %.0f}",
+      yBreaks: "0, 10",
+    });
+    expect(out).toEqual({ xFormat: "{:num %.0f}", yBreaks: "0, 10" });
+  });
+});
+
 describe("buildQuery emits PROJECT clause", () => {
   const baseLayers: Layer[] = [
     { id: "L", draw: "point", mappings: { x: "bill_len", y: "bill_dep" } },
@@ -2078,5 +2155,257 @@ describe("buildQuery emits SCALE … SETTING breaks for axis breaks (chart-level
 
   it("empty / whitespace breaks emits no SETTING breaks", () => {
     expect(q({ xBreaks: "   " })).not.toContain("SETTING breaks");
+  });
+});
+
+describe("layerDrawClause", () => {
+  it("emits the same DRAW clause buildQuery would for a mapped layer", () => {
+    const r = layerDrawClause(
+      layer("point", { x: "bill_len", y: "bill_dep" }),
+      COLS,
+    );
+    expect(r).toEqual({
+      draw: "point",
+      clause: "DRAW point MAPPING bill_len AS x, bill_dep AS y",
+    });
+  });
+
+  it("returns null when the layer has no own or shared aesthetics", () => {
+    expect(layerDrawClause(layer("point"), COLS)).toBeNull();
+  });
+
+  it("resolves via shared mappings alone (clause without MAPPING)", () => {
+    const r = layerDrawClause(layer("point"), COLS, {
+      x: "bill_len",
+      y: "bill_dep",
+    });
+    expect(r).toEqual({ draw: "point", clause: "DRAW point" });
+  });
+
+  it("ignores the disabled flag (caller gates on it)", () => {
+    const r = layerDrawClause(
+      { ...layer("point", { x: "bill_len" }), disabled: true },
+      COLS,
+    );
+    expect(r?.clause).toBe("DRAW point MAPPING bill_len AS x");
+  });
+
+  it("resolves pie to a DRAW bar clause but reports draw 'pie'", () => {
+    const r = layerDrawClause(layer("pie", { fill: "species" }), COLS);
+    expect(r?.draw).toBe("pie");
+    expect(r?.clause).toBe("DRAW bar MAPPING species AS fill");
+  });
+
+  it("appends SETTING, FILTER and PARTITION tails", () => {
+    const r = layerDrawClause(
+      {
+        ...layer("point", { x: "bill_len", y: "bill_dep" }),
+        settings: { linewidth: 3, filter: "species = 'Adelie'" },
+        partition: ["species"],
+      },
+      COLS,
+    );
+    expect(r?.clause).toBe(
+      "DRAW point MAPPING bill_len AS x, bill_dep AS y SETTING linewidth => 3 FILTER species = 'Adelie' PARTITION BY species",
+    );
+  });
+
+  it("drops a stale y mapping for ribbon", () => {
+    const r = layerDrawClause(
+      layer("ribbon", { x: "bill_len", y: "bill_dep", ymin: "bill_len", ymax: "bill_dep" }),
+      COLS,
+    );
+    expect(r?.clause).toBe(
+      "DRAW ribbon MAPPING bill_len AS x, bill_len AS ymin, bill_dep AS ymax",
+    );
+  });
+
+  it("keeps label only for the text geom", () => {
+    const text = layerDrawClause(
+      layer("text", { x: "bill_len", y: "bill_dep", label: "species" }),
+      COLS,
+    );
+    expect(text?.clause).toContain("species AS label");
+    const point = layerDrawClause(
+      layer("point", { x: "bill_len", y: "bill_dep", label: "species" }),
+      COLS,
+    );
+    expect(point?.clause).not.toContain("AS label");
+  });
+});
+
+describe("missing required aesthetics skip the layer instead of erroring", () => {
+  it("layerDrawClause returns null for text without a label mapping", () => {
+    expect(
+      layerDrawClause(layer("text", { x: "bill_len", y: "bill_dep" }), COLS),
+    ).toBeNull();
+  });
+
+  it("layerDrawClause treats an empty-string label as missing", () => {
+    expect(
+      layerDrawClause(
+        layer("text", { x: "bill_len", y: "bill_dep", label: "" }),
+        COLS,
+      ),
+    ).toBeNull();
+  });
+
+  it("layerDrawClause returns null for ribbon/range with partial ymin/ymax", () => {
+    expect(layerDrawClause(layer("ribbon", { x: "bill_len" }), COLS)).toBeNull();
+    expect(
+      layerDrawClause(layer("ribbon", { x: "bill_len", ymin: "bill_dep" }), COLS),
+    ).toBeNull();
+    expect(
+      layerDrawClause(layer("range", { x: "bill_len", y: "bill_dep" }), COLS),
+    ).toBeNull();
+  });
+
+  it("layerDrawClause returns null for a shared-mappings-only text layer", () => {
+    expect(
+      layerDrawClause(layer("text"), COLS, { x: "bill_len", y: "bill_dep" }),
+    ).toBeNull();
+  });
+
+  it("buildQuery emits the working layers and drops the incomplete one", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        layer("point", { x: "bill_len", y: "bill_dep" }, "L1"),
+        layer("text", { x: "bill_len", y: "bill_dep" }, "L2"),
+      ],
+      [],
+      COLS,
+    );
+    expect(q).toContain("DRAW point");
+    expect(q).not.toContain("DRAW text");
+
+    const q2 = buildQuery(
+      "ggsql:penguins",
+      [
+        layer("point", { x: "bill_len", y: "bill_dep" }, "L1"),
+        layer("ribbon", { x: "bill_len", ymin: "bill_dep" }, "L2"),
+      ],
+      [],
+      COLS,
+    );
+    expect(q2).toContain("DRAW point");
+    expect(q2).not.toContain("DRAW ribbon");
+  });
+
+  it("buildQuery returns null when the only layer is incomplete", () => {
+    expect(
+      buildQuery(
+        "ggsql:penguins",
+        [layer("text", { x: "bill_len", y: "bill_dep" })],
+        [],
+        COLS,
+      ),
+    ).toBeNull();
+  });
+
+  it("a custom layer still emits when the only chart layer is incomplete", () => {
+    const custom: CustomLayer = {
+      id: "C",
+      ggsql: "SCALE x TO log",
+      position: 0,
+    };
+    const q = buildQuery(
+      "ggsql:penguins",
+      [layer("text", { x: "bill_len", y: "bill_dep" })],
+      [],
+      COLS,
+      undefined,
+      undefined,
+      [custom],
+    );
+    expect(q).toContain("SCALE x TO log");
+    expect(q).not.toContain("DRAW text");
+  });
+});
+
+describe("missingRequiredWarnings", () => {
+  it("reports a text layer missing its label", () => {
+    expect(
+      missingRequiredWarnings(
+        [
+          layer("point", { x: "bill_len", y: "bill_dep" }, "L1"),
+          layer("text", { x: "bill_len", y: "bill_dep" }, "L2"),
+        ],
+        COLS,
+      ),
+    ).toEqual([
+      "You need to drag a variable to the Label to see the Text labels",
+    ]);
+  });
+
+  it("reports plural missing mappings in GEOM_SPECIFIC_REQUIRED order", () => {
+    expect(
+      missingRequiredWarnings([layer("ribbon", { x: "bill_len" })], COLS),
+    ).toEqual([
+      "You need to drag variables to the Y min and Y max to see the Ribbon",
+    ]);
+    expect(
+      missingRequiredWarnings([layer("range", { x: "bill_len" })], COLS),
+    ).toEqual([
+      "You need to drag variables to the Y min and Y max to see the Error bar",
+    ]);
+  });
+
+  it("stays silent for disabled and for fully-empty layers", () => {
+    expect(
+      missingRequiredWarnings(
+        [
+          {
+            ...layer("text", { x: "bill_len", y: "bill_dep" }),
+            disabled: true,
+          },
+          layer("text"),
+        ],
+        COLS,
+      ),
+    ).toEqual([]);
+  });
+
+  it("warns for a shared-mappings-only text layer", () => {
+    expect(
+      missingRequiredWarnings([layer("text")], COLS, {
+        x: "bill_len",
+        y: "bill_dep",
+      }),
+    ).toEqual([
+      "You need to drag a variable to the Label to see the Text labels",
+    ]);
+  });
+
+  it("stays silent when required aesthetics are mapped", () => {
+    expect(
+      missingRequiredWarnings(
+        [
+          layer("point", { x: "bill_len", y: "bill_dep" }),
+          layer("text", { x: "bill_len", y: "bill_dep", label: "species" }),
+          layer("ribbon", {
+            x: "bill_len",
+            ymin: "bill_dep",
+            ymax: "bill_len",
+          }),
+        ],
+        COLS,
+      ),
+    ).toEqual([]);
+  });
+
+  it("reports multiple offending layers in layer order", () => {
+    expect(
+      missingRequiredWarnings(
+        [
+          layer("ribbon", { x: "bill_len" }, "L1"),
+          layer("text", { x: "bill_len", y: "bill_dep" }, "L2"),
+        ],
+        COLS,
+      ),
+    ).toEqual([
+      "You need to drag variables to the Y min and Y max to see the Ribbon",
+      "You need to drag a variable to the Label to see the Text labels",
+    ]);
   });
 });

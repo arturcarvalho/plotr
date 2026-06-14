@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { Aes } from "../lib/buildQuery";
 import { Dropzone } from "./Dropzone";
 import { MultiDropzone } from "./MultiDropzone";
+import { ChevronRightIcon } from "./icons";
 
 interface Props {
   mappings: Partial<Record<Aes, string>>;
@@ -290,20 +291,3 @@ function DropzoneRow({
   );
 }
 
-function ChevronRightIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}

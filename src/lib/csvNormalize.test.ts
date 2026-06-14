@@ -67,7 +67,7 @@ describe("normalizeCsvHeader", () => {
   });
 
   it("preserves a UTF-8 BOM as the first byte of the first header cell", () => {
-    // BOM (﻿) survives the trim because it's a non-whitespace codepoint
+    // BOM survives the trim because it's a non-whitespace codepoint
     // by Unicode classification (zero-width no-break space). Whether ggsql
     // cares is its own problem; plotr just doesn't introduce a regression.
     const input = enc("﻿name, age\nA,1\n");

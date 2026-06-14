@@ -1,9 +1,20 @@
-import { Fragment } from "react";
-import type {
-  CustomLayer,
-  LabelsLayer,
-  Layer,
-} from "../lib/buildQuery";
+import { useRef, type ReactNode, type RefObject } from "react";
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import type { CustomLayer, LabelsLayer, Layer } from "../lib/buildQuery";
+import { stripOrder } from "../lib/layerOrder";
 import { LayerCard } from "./LayerCard";
 import { LabelsCard } from "./LabelsCard";
 import { CustomCard } from "./CustomCard";
@@ -25,12 +36,8 @@ interface Props {
   onAddLayer: () => void;
   onAddLabels: () => void;
   onAddCustom: () => void;
-  onRemoveLayer: (id: string) => void;
-  onRemoveLabels: (id: string) => void;
-  onRemoveCustom: (id: string) => void;
-  onToggleLayerDisabled: (id: string) => void;
-  onToggleLabelsDisabled: (id: string) => void;
-  onToggleCustomDisabled: (id: string) => void;
+  /** Drag-reorder: move card `activeId` to the slot of card `overId`. */
+  onReorder: (activeId: string, overId: string) => void;
 }
 
 export function BuildPanel({
@@ -49,50 +56,30 @@ export function BuildPanel({
   onAddLayer,
   onAddLabels,
   onAddCustom,
-  onRemoveLayer,
-  onRemoveLabels,
-  onRemoveCustom,
-  onToggleLayerDisabled,
-  onToggleLabelsDisabled,
-  onToggleCustomDisabled,
+  onReorder,
 }: Props) {
-  // Labels with position > layers.length (e.g. from a stale URL hash that
-  // outlived a layer removal) are clamped to the final slot so they still
-  // render rather than vanishing.
-  const labelsAt = (i: number) =>
-    labels.filter((l) =>
-      i >= layers.length ? l.position >= i : l.position === i,
-    );
-  const customsAt = (i: number) =>
-    customLayers.filter((c) =>
-      i >= layers.length ? c.position >= i : c.position === i,
-    );
+  const order = stripOrder(layers, labels, customLayers);
+  const layerById = new Map(layers.map((l) => [l.id, l]));
+  const labelById = new Map(labels.map((l) => [l.id, l]));
+  const customById = new Map(customLayers.map((c) => [c.id, c]));
+  const firstLayerId = order.find((o) => o.kind === "layer")?.id;
 
-  const renderLabels = (i: number) =>
-    labelsAt(i).map((l) => (
-      <div key={l.id} className="self-center">
-        <LabelsCard
-          open={activeLabelsId === l.id}
-          disabled={l.disabled === true}
-          onToggle={() => onToggleLabels(l.id)}
-          onRemove={() => onRemoveLabels(l.id)}
-          onToggleDisabled={() => onToggleLabelsDisabled(l.id)}
-        />
-      </div>
-    ));
+  // A drop can leak a click on the source card, which would toggle its panel.
+  // Set on drag start, consumed by the cards' capture handler; cleared on the
+  // next tick after a drop (the leaked click, when it fires, comes first).
+  const suppressClickRef = useRef(false);
 
-  const renderCustoms = (i: number) =>
-    customsAt(i).map((c) => (
-      <div key={c.id} className="self-center">
-        <CustomCard
-          open={activeCustomId === c.id}
-          disabled={c.disabled === true}
-          onToggle={() => onToggleCustom(c.id)}
-          onRemove={() => onRemoveCustom(c.id)}
-          onToggleDisabled={() => onToggleCustomDisabled(c.id)}
-        />
-      </div>
-    ));
+  // The 5px activation distance keeps plain clicks opening panels — a drag
+  // only starts (and only then suppresses the click) after real movement.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  // Body-level cursor so the closed hand persists while the pointer is
+  // outside the dragged card (the transform lags the pointer).
+  const endDragCursor = () => {
+    document.body.style.cursor = "";
+  };
 
   return (
     <aside className="relative z-30 flex h-full w-14 shrink-0 flex-col bg-app-chrome">
@@ -114,27 +101,63 @@ export function BuildPanel({
           </button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col items-center self-stretch overflow-y-auto overflow-x-hidden py-3">
-          {layers.map((layer, i) => (
-            <Fragment key={layer.id}>
-              {renderLabels(i)}
-              {renderCustoms(i)}
-              <div
-                className="self-center"
-                {...(i === 0 ? { "data-tutorial-target": "layer" } : {})}
-              >
-                <LayerCard
-                  resolvedDraw={resolvedDrawByLayerId[layer.id] ?? null}
-                  selected={activeLayerId === layer.id}
-                  disabled={layer.disabled === true}
-                  onToggle={() => onToggleLayer(layer.id)}
-                  onRemove={() => onRemoveLayer(layer.id)}
-                  onToggleDisabled={() => onToggleLayerDisabled(layer.id)}
-                />
-              </div>
-            </Fragment>
-          ))}
-          {renderLabels(layers.length)}
-          {renderCustoms(layers.length)}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragStart={() => {
+              suppressClickRef.current = true;
+              document.body.style.cursor = "grabbing";
+            }}
+            onDragCancel={() => {
+              suppressClickRef.current = false;
+              endDragCursor();
+            }}
+            onDragEnd={({ active, over }: DragEndEvent) => {
+              endDragCursor();
+              setTimeout(() => {
+                suppressClickRef.current = false;
+              }, 0);
+              if (over && active.id !== over.id) {
+                onReorder(String(active.id), String(over.id));
+              }
+            }}
+          >
+            <SortableContext
+              items={order.map((o) => o.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {order.map((item) => (
+                <SortableCard
+                  key={item.id}
+                  id={item.id}
+                  tutorialTarget={item.id === firstLayerId}
+                  suppressClickRef={suppressClickRef}
+                >
+                  {item.kind === "layer" ? (
+                    <LayerCard
+                      resolvedDraw={resolvedDrawByLayerId[item.id] ?? null}
+                      selected={activeLayerId === item.id}
+                      disabled={layerById.get(item.id)?.disabled === true}
+                      onToggle={() => onToggleLayer(item.id)}
+                    />
+                  ) : item.kind === "labels" ? (
+                    <LabelsCard
+                      open={activeLabelsId === item.id}
+                      disabled={labelById.get(item.id)?.disabled === true}
+                      onToggle={() => onToggleLabels(item.id)}
+                    />
+                  ) : (
+                    <CustomCard
+                      open={activeCustomId === item.id}
+                      disabled={customById.get(item.id)?.disabled === true}
+                      onToggle={() => onToggleCustom(item.id)}
+                    />
+                  )}
+                </SortableCard>
+              ))}
+            </SortableContext>
+          </DndContext>
           <div className="mt-1">
             <AddMenu
               onAddChart={onAddLayer}
@@ -145,6 +168,48 @@ export function BuildPanel({
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Sortable wrapper for one strip card. `attributes` is deliberately not
+ *  spread: it would add role="button" + tabindex around the card's real
+ *  <button> (nested interactive roles, broken name-based selectors); keyboard
+ *  focus + Enter/Space stay with the card button, which opens its panel. */
+function SortableCard({
+  id,
+  tutorialTarget,
+  suppressClickRef,
+  children,
+}: {
+  id: string;
+  tutorialTarget: boolean;
+  suppressClickRef: RefObject<boolean>;
+  children: ReactNode;
+}) {
+  const { setNodeRef, transform, transition, listeners, isDragging } =
+    useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      onClickCapture={(e) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+      style={{
+        transform: transform
+          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+          : undefined,
+        transition,
+      }}
+      className={["touch-none self-center", isDragging ? "relative z-10" : ""].join(" ")}
+      {...(tutorialTarget ? { "data-tutorial-target": "layer" } : {})}
+    >
+      {children}
+    </div>
   );
 }
 

@@ -2,12 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import vegaEmbed from "vega-embed";
 import { Warn } from "vega";
-import { ggsql, type ColumnInfo, type ColumnKind } from "./lib/ggsql";
+import {
+  ggsql,
+  type ColumnInfo,
+  type ColumnKind,
+  type SqlResult,
+} from "./lib/ggsql";
 import {
   AESTHETICS,
   AUTO,
   buildQuery,
   FACETS,
+  layerDrawClause,
+  missingRequiredWarnings,
   UNIVERSAL_AESTHETICS,
   type Aes,
   type CustomLayer,
@@ -18,6 +25,11 @@ import {
   type ScaleSettings,
 } from "./lib/buildQuery";
 import {
+  convertLayerToCustom,
+  decrementPositionsAfter,
+  reorderStrip,
+} from "./lib/layerOrder";
+import {
   columnAxisKind,
   compatibleDraws,
   resolveDraw,
@@ -25,15 +37,18 @@ import {
 } from "./lib/autoChart";
 import {
   deserialize,
+  isEmptyState,
   serialize,
   type ActivePanel,
+  type Persisted,
   type SecondaryPanel,
 } from "./lib/persist";
 import { clearLastCsv, loadLastCsv, saveLastCsv } from "./lib/csvStore";
 import { normalizeCsvHeader } from "./lib/csvNormalize";
 import { countConfiguredVariables } from "./lib/configSummary";
 import {
-  isChartError,
+  dropAllRenderErrors,
+  dropStaleChartErrors,
   isUnrecoverableError,
   isWasmCrashError,
 } from "./lib/errorClass";
@@ -41,6 +56,7 @@ import { BuildPanel } from "./components/BuildPanel";
 import { ChartPanel } from "./components/ChartPanel";
 import { ChartTypePanel } from "./components/ChartTypePanel";
 import { DataPanel } from "./components/DataPanel";
+import { DataTablePanel } from "./components/DataTablePanel";
 import { GGSQLPanel } from "./components/GGSQLPanel";
 import { VegaSpecPanel } from "./components/VegaSpecPanel";
 import { CustomPanel } from "./components/CustomPanel";
@@ -54,17 +70,16 @@ import { NoDataCard, Viz } from "./components/Viz";
 import { ProblemsPanel } from "./components/ProblemsPanel";
 import { TutorialOverlay } from "./components/Tutorial";
 import { isSeen, markSeen } from "./lib/tutorial";
+import { newId } from "./lib/id";
 import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 
 // Debounce window for chart re-renders. Rapid input (slider drags, text typing)
 // resets the timer on every change; the chart only renders once the user pauses
 // for this long. Live preview is sacrificed for zero ggsql.execute calls during
-// active scrubbing — important because ggsql-wasm v0.3.1 OOBs on rapid execute,
+// active scrubbing — important because ggsql-wasm OOBs on rapid execute,
 // especially with multi-layer queries. Lower = quicker post-pause render, more
 // renders; higher = slower preview but cheaper. Tune here when the feel is off.
 const CHART_DEBOUNCE_MS = 200;
-
-const newId = () => Math.random().toString(36).slice(2, 9);
 
 const initialLayer = (): Layer => ({
   id: newId(),
@@ -84,6 +99,8 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
+  // First 100 rows of the active table, for the bottom Data tab.
+  const [dataPreview, setDataPreview] = useState<SqlResult | null>(null);
   // Additive in-memory cache of column name → kind. Seeded each time a table's
   // schema lands so the no-data card can still render type badges after the
   // user resets the file. Never pruned mid-session; lost only on full page
@@ -189,26 +206,38 @@ export default function App() {
   //   - Panel-selection changes (which side panel is open) just replaceState,
   //     so opening/closing panels doesn't pollute the back-button history.
   // Both close over the full state and serialise the same complete payload,
-  // so the URL is always a single source of truth.
-  const buildPersistPayload = () =>
-    serialize({
-      layers,
-      labels,
-      customLayers: customLayers.length > 0 ? customLayers : undefined,
-      project,
-      scales,
-      sharedMappings,
-      activeTable,
-      activePanel,
-      secondaryPanel,
-      columnKindsCache:
-        Object.keys(columnKindsCache).length > 0
-          ? columnKindsCache
-          : undefined,
-    });
+  // so the URL is always a single source of truth. When an action changes
+  // chart *and* panel state in one commit, the panel effect defers to the
+  // chart effect (it already serialises panel state too) so the history push
+  // wins deterministically instead of racing the panel effect's replaceState.
+  const getPersistedState = (): Persisted => ({
+    layers,
+    labels,
+    customLayers: customLayers.length > 0 ? customLayers : undefined,
+    project,
+    scales,
+    sharedMappings,
+    activeTable,
+    activePanel,
+    secondaryPanel,
+    columnKindsCache:
+      Object.keys(columnKindsCache).length > 0 ? columnKindsCache : undefined,
+  });
+
+  // The next URL hash for the current state, or "" when there's nothing
+  // meaningful to encode — App then writes a clean URL with no `#` at all.
+  const buildNextHash = async (): Promise<string> => {
+    const state = getPersistedState();
+    return isEmptyState(state) ? "" : "#" + (await serialize(state));
+  };
 
   const lastChartPushTsRef = useRef(0);
   const CHART_HISTORY_DEBOUNCE_MS = 600;
+  // Set by the chart-state effect when it runs, read by the panel-state effect
+  // (which runs later in the same commit), then cleared by a trailing effect.
+  // Lets the panel effect tell "chart state also changed this commit" — in
+  // which case it stands down and lets the chart effect own the URL write.
+  const chartEffectRanRef = useRef(false);
 
   // Chart-state effect: push to history, debounced.
   useEffect(() => {
@@ -218,19 +247,20 @@ export default function App() {
     // it once the deferred table resolves — polluting browser history (and
     // making Back land on a spurious "no data" entry right after a reload).
     if (pendingActiveTableRef.current !== null) return;
+    chartEffectRanRef.current = true;
     let cancelled = false;
     (async () => {
-      const payload = await buildPersistPayload();
+      const next = await buildNextHash();
       if (cancelled) return;
-      const next = "#" + payload;
       if (window.location.hash === next) return;
+      const url = next || window.location.pathname + window.location.search;
       const now = Date.now();
       const inDebounceWindow =
         now - lastChartPushTsRef.current < CHART_HISTORY_DEBOUNCE_MS;
       if (inDebounceWindow) {
-        window.history.replaceState(null, "", next);
+        window.history.replaceState(null, "", url);
       } else {
-        window.history.pushState(null, "", next);
+        window.history.pushState(null, "", url);
       }
       lastChartPushTsRef.current = now;
     })();
@@ -259,19 +289,30 @@ export default function App() {
     // `secondaryPanel` are set synchronously during hydration, so this effect
     // can fire while `activeTable` is still pending. Skip until it lands.
     if (pendingActiveTableRef.current !== null) return;
+    // If chart state changed in this same commit, the chart effect (already
+    // running, and serialising panel state too) owns the write with a history
+    // push. Standing down here avoids a racing replaceState whose async gzip
+    // could resolve first and swallow that back-button entry.
+    if (chartEffectRanRef.current) return;
     let cancelled = false;
     (async () => {
-      const payload = await buildPersistPayload();
+      const next = await buildNextHash();
       if (cancelled) return;
-      const next = "#" + payload;
       if (window.location.hash === next) return;
-      window.history.replaceState(null, "", next);
+      const url = next || window.location.pathname + window.location.search;
+      window.history.replaceState(null, "", url);
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, activePanel, secondaryPanel]);
+
+  // Runs after both URL-sync effects every commit, clearing the per-commit flag
+  // so a later panel-only commit isn't mistaken for a combined chart+panel one.
+  useEffect(() => {
+    chartEffectRanRef.current = false;
+  });
 
   // Browser Back / Forward — re-deserialise the URL into state. Both persist
   // effects above re-run after the setStates flush; their hash-already-matches
@@ -281,9 +322,26 @@ export default function App() {
     if (!hydrated) return;
     const onPop = async () => {
       const gen = ++popGenRef.current;
-      const data = await deserialize(window.location.hash);
+      const hash = window.location.hash;
+      const data = await deserialize(hash);
       if (gen !== popGenRef.current) return; // a newer popstate already landed
-      if (!data) return;
+      if (!data) {
+        // A hash-less entry (clean URL) is the empty state — reset to cold
+        // start. A non-empty but undecodable `s=` is malformed: keep current.
+        if (!/(?:^|[#&])s=/.test(hash)) {
+          setLayers([initialLayer()]);
+          setLabels([]);
+          setCustomLayers([]);
+          setProject({});
+          setScales({});
+          setSharedMappings({});
+          setActiveTable(null);
+          setActivePanel(null);
+          setSecondaryPanel(null);
+          setColumnKindsCache({});
+        }
+        return;
+      }
       setLayers(data.layers.length > 0 ? data.layers : [initialLayer()]);
       setLabels(data.labels);
       setCustomLayers(data.customLayers ?? []);
@@ -316,7 +374,7 @@ export default function App() {
     if (!ready) return;
     let cancelled = false;
     (async () => {
-      let lastCsv: Awaited<ReturnType<typeof loadLastCsv>> = null;
+      let lastCsv: Awaited<ReturnType<typeof loadLastCsv>>;
       try {
         lastCsv = await loadLastCsv();
         if (!cancelled && lastCsv) {
@@ -356,12 +414,16 @@ export default function App() {
   useEffect(() => {
     if (!activeTable) {
       setColumns([]);
+      setDataPreview(null);
       return;
     }
     if (!ready) return; // wait for wasm before introspecting
     try {
       const next = ggsql.describeColumns(activeTable);
       setColumns(next);
+      // execute_sql caps results at 100 rows and reports the table's real
+      // total via total_rows/truncated — exactly the Data-tab preview shape.
+      setDataPreview(ggsql.executeSql(`SELECT * FROM ${activeTable}`));
       // Seed the additive kind cache so the no-data card can still render
       // type badges if the user later resets the file.
       setColumnKindsCache((prev) => {
@@ -373,6 +435,7 @@ export default function App() {
     } catch (e) {
       setErrors((prev) => [`Failed to inspect "${activeTable}": ${e}`, ...prev]);
       setColumns([]);
+      setDataPreview(null);
     }
   }, [activeTable, ready]);
 
@@ -423,6 +486,20 @@ export default function App() {
     }
     return map;
   }, [layers, columns, sharedMappings]);
+
+  // Build-time warnings for layers skipped from emission (missing geom-
+  // required aesthetics). Derived synchronously — not gated by the chart
+  // debounce — so the amber badge tracks the dropzones' (missing) hint.
+  // Vega warnings stay in the render-coupled `warnings` state; the two merge
+  // only at the consumption sites.
+  const layerWarnings = useMemo(
+    () => missingRequiredWarnings(layers, columns, sharedMappings),
+    [layers, columns, sharedMappings],
+  );
+  const allWarnings = useMemo(
+    () => [...layerWarnings, ...warnings],
+    [layerWarnings, warnings],
+  );
 
   // Auto-reset settings when a layer's resolved draw shifts under it
   // (e.g. scatter → bar after the user swaps the X column from continuous to
@@ -483,9 +560,10 @@ export default function App() {
       // Nothing to render → any recoverable "Chart error:" is stale (it was
       // tied to an earlier query). Drop those, but keep unrecoverable wasm-
       // crash messages, which only a successful render (after a reload) clears.
-      setErrors((prev) =>
-        prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
-      );
+      setErrors((prev) => prev.filter(dropStaleChartErrors));
+      // Vega warnings are tied to the render that produced them; with no
+      // query they'd linger next to layer-skip warnings.
+      setWarnings([]);
       return;
     }
 
@@ -499,9 +577,7 @@ export default function App() {
             setVegaSpec(null);
             // The query parsed (hasVisual didn't throw) but has no visual to
             // draw — clear stale recoverable chart errors, same as above.
-            setErrors((prev) =>
-              prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
-            );
+            setErrors((prev) => prev.filter(dropStaleChartErrors));
           }
           return;
         }
@@ -596,9 +672,7 @@ export default function App() {
           // Successful render clears any displayed chart errors and
           // unrecoverable messages — both are by definition stale once we've
           // drawn a frame (e.g. after the user reloaded past a wasm crash).
-          setErrors((prev) =>
-            prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
-          );
+          setErrors((prev) => prev.filter(dropAllRenderErrors));
           // Expose the just-rendered Vega-Lite spec to the bottom-pane tab.
           setVegaSpec(spec);
         }
@@ -620,13 +694,13 @@ export default function App() {
           // unrecoverable, so the chart pane shows a "Reload page" action.
           setErrors((prev) => [
             "ggsql-wasm crashed. Reload the page to recover — your chart settings and data are preserved.",
-            ...prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
+            ...prev.filter(dropAllRenderErrors),
           ]);
           return;
         }
         setErrors((prev) => [
           `Chart error: ${String(e)}`,
-          ...prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
+          ...prev.filter(dropAllRenderErrors),
         ]);
       }
     };
@@ -684,6 +758,12 @@ export default function App() {
   const onChangeSettings = (id: string, settings: LayerSettings) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, settings } : l)));
 
+  // Step 3 (the final tutorial step) completes when a variable gets mapped.
+  const completeTutorial = () => {
+    markSeen();
+    setTutorialStep(null);
+  };
+
   const onMap = (id: string, aes: Aes, col: string | undefined) => {
     if (id === SHARED_MAPPINGS_KEY) {
       setSharedMappings((cur) => {
@@ -692,10 +772,7 @@ export default function App() {
         delete next[aes];
         return next;
       });
-      if (col && tutorialStep === 3) {
-        markSeen();
-        setTutorialStep(null);
-      }
+      if (col && tutorialStep === 3) completeTutorial();
       return;
     }
     setLayers((ls) =>
@@ -710,10 +787,7 @@ export default function App() {
         return { ...l, draw, mappings };
       }),
     );
-    if (col && tutorialStep === 3) {
-      markSeen();
-      setTutorialStep(null);
-    }
+    if (col && tutorialStep === 3) completeTutorial();
   };
 
   const onDrop = (
@@ -737,10 +811,7 @@ export default function App() {
         return mappings === l.mappings ? l : { ...l, draw, mappings };
       }),
     );
-    if (tutorialStep === 3) {
-      markSeen();
-      setTutorialStep(null);
-    }
+    if (tutorialStep === 3) completeTutorial();
     setSharedMappings((cur) => {
       let next = cur;
       if (src && src.layerId === SHARED_MAPPINGS_KEY) {
@@ -808,21 +879,15 @@ export default function App() {
   };
 
   const onRemoveLayer = (id: string) => {
-    setLayers((ls) => {
-      const idx = ls.findIndex((l) => l.id === id);
-      if (idx < 0) return ls;
-      setLabels((arr) =>
-        arr.map((l) =>
-          l.position > idx ? { ...l, position: l.position - 1 } : l,
-        ),
-      );
-      setCustomLayers((arr) =>
-        arr.map((c) =>
-          c.position > idx ? { ...c, position: c.position - 1 } : c,
-        ),
-      );
-      return ls.filter((l) => l.id !== id);
-    });
+    // Each setter runs with its own pure updater. Nesting the sibling setters
+    // inside setLayers would re-enqueue them on every StrictMode double-invoke,
+    // decrementing positions twice and shifting strip/DRAW slots out of place.
+    // Guard a missing id so a no-op removal doesn't reset the panels either.
+    const idx = layers.findIndex((l) => l.id === id);
+    if (idx < 0) return;
+    setLayers((ls) => ls.filter((l) => l.id !== id));
+    setLabels((arr) => decrementPositionsAfter(arr, idx));
+    setCustomLayers((arr) => decrementPositionsAfter(arr, idx));
     setActivePanel((p) =>
       p?.kind === "layer" && p.layerId === id ? null : p,
     );
@@ -879,6 +944,41 @@ export default function App() {
     setCustomLayers((arr) =>
       arr.map((c) => (c.id === id ? { ...c, disabled: !c.disabled } : c)),
     );
+  };
+
+  // Drag-reorder of the build strip: move card `activeId` to `overId`'s slot.
+  // Layer array order + labels/custom positions re-derive in the pure helper;
+  // reference equality lets unchanged arrays skip their state set.
+  const onReorderStrip = (activeId: string, overId: string) => {
+    const next = reorderStrip(layers, labels, customLayers, activeId, overId);
+    if (next.layers !== layers) setLayers(next.layers);
+    if (next.labels !== labels) setLabels(next.labels);
+    if (next.customLayers !== customLayers) setCustomLayers(next.customLayers);
+  };
+
+  // Replace a chart layer with a custom layer holding its emitted DRAW clause,
+  // in the same strip slot, and open the new custom panel. A lone pie layer
+  // converts to its literal `DRAW bar …` emission — the chart-level
+  // `PROJECT TO polar` follows the remaining pie layers, so it goes cartesian.
+  const onConvertLayerToCustom = (id: string) => {
+    const src = layers.find((l) => l.id === id);
+    if (!src) return;
+    const r = layerDrawClause(src, columns, sharedMappings);
+    if (!r) return;
+    const next = convertLayerToCustom(
+      layers,
+      labels,
+      customLayers,
+      id,
+      newId(),
+      r.clause,
+    );
+    if (!next) return;
+    setLayers(next.layers);
+    setLabels(next.labels);
+    setCustomLayers(next.customLayers);
+    setActivePanel({ kind: "custom", customId: next.custom.id });
+    setSecondaryPanel(null);
   };
 
   // File-only reset: drops the loaded CSV from IndexedDB and clears the
@@ -1045,12 +1145,7 @@ export default function App() {
                   onAddLayer={onAddLayer}
                   onAddLabels={onAddLabels}
                   onAddCustom={onAddCustom}
-                  onRemoveLayer={onRemoveLayer}
-                  onRemoveLabels={onRemoveLabels}
-                  onRemoveCustom={onRemoveCustom}
-                  onToggleLayerDisabled={onToggleLayerDisabled}
-                  onToggleLabelsDisabled={onToggleLabelsDisabled}
-                  onToggleCustomDisabled={onToggleCustomDisabled}
+                  onReorder={onReorderStrip}
                 />
                 {activeLabels && activePanel?.kind === "labels" ? (
                   <LabelsPanel
@@ -1058,12 +1153,20 @@ export default function App() {
                     onChange={(patch) =>
                       onUpdateLabels(activePanel.labelsId, patch)
                     }
+                    onRemove={() => onRemoveLabels(activePanel.labelsId)}
+                    onToggleDisabled={() =>
+                      onToggleLabelsDisabled(activePanel.labelsId)
+                    }
                   />
                 ) : activeCustom && activePanel?.kind === "custom" ? (
                   <CustomPanel
                     custom={activeCustom}
                     onChange={(patch) =>
                       onUpdateCustom(activePanel.customId, patch)
+                    }
+                    onRemove={() => onRemoveCustom(activePanel.customId)}
+                    onToggleDisabled={() =>
+                      onToggleCustomDisabled(activePanel.customId)
                     }
                   />
                 ) : activePanel?.kind === "shared" ? (
@@ -1100,6 +1203,15 @@ export default function App() {
                     onRemovePartition={(col) =>
                       onRemovePartition(panelLayer.id, col)
                     }
+                    onRemove={() => onRemoveLayer(panelLayer.id)}
+                    onToggleDisabled={() =>
+                      onToggleLayerDisabled(panelLayer.id)
+                    }
+                    canConvert={
+                      layerDrawClause(panelLayer, columns, sharedMappings) !==
+                      null
+                    }
+                    onConvert={() => onConvertLayerToCustom(panelLayer.id)}
                   />
                 ) : (
                   <div className="h-full w-[280px] shrink-0 bg-app-chrome" />
@@ -1121,12 +1233,13 @@ export default function App() {
                 ) : secondaryPanel?.kind === "mapping" && panelLayer ? (
                   <MappingPanel
                     aes={secondaryPanel.aes}
+                    resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
                     settings={panelLayer.settings ?? {}}
                     scales={scales}
                     mappingKind={resolveMappingKind(
+                      columns,
                       panelLayer.mappings[secondaryPanel.aes] ??
                         sharedMappings[secondaryPanel.aes],
-                      columns,
                     )}
                     onChangeSettings={(s) =>
                       onChangeSettings(panelLayer.id, s)
@@ -1162,6 +1275,7 @@ export default function App() {
                     hasError={errors.length > 0}
                     errorText={chartErrorText}
                     unrecoverable={wasmUnrecoverable}
+                    warnings={layerWarnings}
                     onReload={() => window.location.reload()}
                   />
                 </div>
@@ -1177,11 +1291,14 @@ export default function App() {
                     tab={bottomTab}
                     onTabChange={setBottomTab}
                     errorCount={errors.length}
-                    warningCount={warnings.length}
+                    warningCount={allWarnings.length}
                     problems={
-                      <ProblemsPanel errors={errors} warnings={warnings} />
+                      <ProblemsPanel errors={errors} warnings={allWarnings} />
                     }
                     ggsql={<GGSQLPanel query={query} />}
+                    data={
+                      <DataTablePanel preview={dataPreview} columns={columns} />
+                    }
                     vegaLite={<VegaSpecPanel spec={vegaSpec} />}
                   />
                 </div>

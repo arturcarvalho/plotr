@@ -10,7 +10,8 @@ const DB_VERSION = 1;
 const STORE = "csv";
 const KEY = "current";
 
-interface CsvRecord {
+/** The persisted CSV blob — the return type of `loadLastCsv`. */
+export interface CsvRecord {
   name: string;
   bytes: Uint8Array;
 }
