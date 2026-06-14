@@ -6,6 +6,19 @@ export interface StripItem {
   id: string;
 }
 
+/** Shift labels/custom positions down by one after the chart layer at `idx`
+ *  is removed — every item with `position > idx` loses a leading layer slot.
+ *  Pure: items at/below `idx` keep their reference; the input is never
+ *  mutated, so it's safe to call inside a React state updater. */
+export function decrementPositionsAfter<T extends { position: number }>(
+  items: T[],
+  idx: number,
+): T[] {
+  return items.map((it) =>
+    it.position > idx ? { ...it, position: it.position - 1 } : it,
+  );
+}
+
 /** Display order of the build strip's reorderable cards. For each chart-layer
  *  index i: labels at position i (array order), then customs at position i
  *  (array order), then layer i. Positions >= layers.length — including stale

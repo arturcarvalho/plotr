@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CustomLayer, LabelsLayer, Layer } from "./buildQuery";
 import {
   convertLayerToCustom,
+  decrementPositionsAfter,
   reorderStrip,
   stripOrder,
   type StripItem,
@@ -295,5 +296,42 @@ describe("convertLayerToCustom", () => {
 
   it("returns null for an unknown layer id", () => {
     expect(convertLayerToCustom([layer("a")], [], [], "zzz", "new", "DRAW point")).toBeNull();
+  });
+});
+
+describe("decrementPositionsAfter", () => {
+  it("shifts positions greater than idx down by one, leaving the rest", () => {
+    const items = [
+      { id: "a", position: 0 },
+      { id: "b", position: 1 },
+      { id: "c", position: 2 },
+      { id: "d", position: 3 },
+    ];
+    expect(decrementPositionsAfter(items, 1).map((i) => i.position)).toEqual([
+      0, 1, 1, 2,
+    ]);
+  });
+
+  it("leaves positions at or below idx untouched (by reference)", () => {
+    const items = [
+      { id: "a", position: 0 },
+      { id: "b", position: 2 },
+    ];
+    const out = decrementPositionsAfter(items, 1);
+    expect(out[0]).toBe(items[0]); // position 0 <= 1, unchanged reference
+    expect(out[1]).not.toBe(items[1]); // position 2 > 1, new object
+    expect(out[1].position).toBe(1);
+  });
+
+  it("does not mutate the input and is a no-op past the last position", () => {
+    const items = [{ id: "a", position: 0 }];
+    const out = decrementPositionsAfter(items, 9);
+    expect(items[0].position).toBe(0);
+    expect(out).not.toBe(items);
+    expect(out.map((i) => i.position)).toEqual([0]);
+  });
+
+  it("handles an empty list", () => {
+    expect(decrementPositionsAfter([], 0)).toEqual([]);
   });
 });

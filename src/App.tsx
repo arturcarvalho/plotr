@@ -24,7 +24,11 @@ import {
   type ProjectSettings,
   type ScaleSettings,
 } from "./lib/buildQuery";
-import { convertLayerToCustom, reorderStrip } from "./lib/layerOrder";
+import {
+  convertLayerToCustom,
+  decrementPositionsAfter,
+  reorderStrip,
+} from "./lib/layerOrder";
 import {
   columnAxisKind,
   compatibleDraws,
@@ -887,19 +891,12 @@ export default function App() {
     // Each setter runs with its own pure updater. Nesting the sibling setters
     // inside setLayers would re-enqueue them on every StrictMode double-invoke,
     // decrementing positions twice and shifting strip/DRAW slots out of place.
+    // Guard a missing id so a no-op removal doesn't reset the panels either.
     const idx = layers.findIndex((l) => l.id === id);
     if (idx < 0) return;
     setLayers((ls) => ls.filter((l) => l.id !== id));
-    setLabels((arr) =>
-      arr.map((l) =>
-        l.position > idx ? { ...l, position: l.position - 1 } : l,
-      ),
-    );
-    setCustomLayers((arr) =>
-      arr.map((c) =>
-        c.position > idx ? { ...c, position: c.position - 1 } : c,
-      ),
-    );
+    setLabels((arr) => decrementPositionsAfter(arr, idx));
+    setCustomLayers((arr) => decrementPositionsAfter(arr, idx));
     setActivePanel((p) =>
       p?.kind === "layer" && p.layerId === id ? null : p,
     );
