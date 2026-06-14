@@ -318,6 +318,24 @@ describe("serialize / deserialize round-trip", () => {
     });
   });
 
+  it("a bad mapping entry drops only that key, keeping the rest of the layer", async () => {
+    const hash = await wrap({
+      L: [
+        {
+          i: "L",
+          d: "point",
+          m: { x: "a", y: "b", bogus: "c", fill: 5 },
+        },
+      ],
+    });
+    const got = await deserialize(hash);
+    // Mirrors decodeMappings: skip the offending entry rather than discarding
+    // the whole layer. `bogus` (unknown aes) and `fill: 5` (non-string) fall
+    // away; the layer and its valid mappings survive.
+    expect(got?.layers).toHaveLength(1);
+    expect(got?.layers[0].mappings).toEqual({ x: "a", y: "b" });
+  });
+
   it("smooth method round-trips", async () => {
     const s = await serialize({
       layers: [
@@ -733,24 +751,20 @@ describe("deserialize validates schema", () => {
     expect(typeof r!.layers[0].id).toBe("string");
   });
 
-  it("drops layer with non-string mapping value", async () => {
-    expect(
-      (
-        await deserialize(
-          await wrap({ L: [{ i: "L", d: "point", m: { x: 42 } }] }),
-        )
-      )?.layers,
-    ).toEqual([]);
+  it("skips non-string mapping value but keeps layer", async () => {
+    const r = await deserialize(
+      await wrap({ L: [{ i: "L", d: "point", m: { x: 42 } }] }),
+    );
+    expect(r?.layers).toHaveLength(1);
+    expect(r!.layers[0].mappings).toEqual({});
   });
 
-  it("drops layer with unknown mapping key", async () => {
-    expect(
-      (
-        await deserialize(
-          await wrap({ L: [{ i: "L", d: "point", m: { rogue: "a" } }] }),
-        )
-      )?.layers,
-    ).toEqual([]);
+  it("skips unknown mapping key but keeps layer", async () => {
+    const r = await deserialize(
+      await wrap({ L: [{ i: "L", d: "point", m: { rogue: "a" } }] }),
+    );
+    expect(r?.layers).toHaveLength(1);
+    expect(r!.layers[0].mappings).toEqual({});
   });
 
   it("strips unknown settings keys but keeps layer", async () => {

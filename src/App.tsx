@@ -202,7 +202,10 @@ export default function App() {
   //   - Panel-selection changes (which side panel is open) just replaceState,
   //     so opening/closing panels doesn't pollute the back-button history.
   // Both close over the full state and serialise the same complete payload,
-  // so the URL is always a single source of truth.
+  // so the URL is always a single source of truth. When an action changes
+  // chart *and* panel state in one commit, the panel effect defers to the
+  // chart effect (it already serialises panel state too) so the history push
+  // wins deterministically instead of racing the panel effect's replaceState.
   const getPersistedState = (): Persisted => ({
     layers,
     labels,
@@ -226,6 +229,11 @@ export default function App() {
 
   const lastChartPushTsRef = useRef(0);
   const CHART_HISTORY_DEBOUNCE_MS = 600;
+  // Set by the chart-state effect when it runs, read by the panel-state effect
+  // (which runs later in the same commit), then cleared by a trailing effect.
+  // Lets the panel effect tell "chart state also changed this commit" — in
+  // which case it stands down and lets the chart effect own the URL write.
+  const chartEffectRanRef = useRef(false);
 
   // Chart-state effect: push to history, debounced.
   useEffect(() => {
@@ -235,6 +243,7 @@ export default function App() {
     // it once the deferred table resolves — polluting browser history (and
     // making Back land on a spurious "no data" entry right after a reload).
     if (pendingActiveTableRef.current !== null) return;
+    chartEffectRanRef.current = true;
     let cancelled = false;
     (async () => {
       const next = await buildNextHash();
@@ -276,6 +285,11 @@ export default function App() {
     // `secondaryPanel` are set synchronously during hydration, so this effect
     // can fire while `activeTable` is still pending. Skip until it lands.
     if (pendingActiveTableRef.current !== null) return;
+    // If chart state changed in this same commit, the chart effect (already
+    // running, and serialising panel state too) owns the write with a history
+    // push. Standing down here avoids a racing replaceState whose async gzip
+    // could resolve first and swallow that back-button entry.
+    if (chartEffectRanRef.current) return;
     let cancelled = false;
     (async () => {
       const next = await buildNextHash();
@@ -289,6 +303,12 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, activePanel, secondaryPanel]);
+
+  // Runs after both URL-sync effects every commit, clearing the per-commit flag
+  // so a later panel-only commit isn't mistaken for a combined chart+panel one.
+  useEffect(() => {
+    chartEffectRanRef.current = false;
+  });
 
   // Browser Back / Forward — re-deserialise the URL into state. Both persist
   // effects above re-run after the setStates flush; their hash-already-matches
@@ -864,21 +884,22 @@ export default function App() {
   };
 
   const onRemoveLayer = (id: string) => {
-    setLayers((ls) => {
-      const idx = ls.findIndex((l) => l.id === id);
-      if (idx < 0) return ls;
-      setLabels((arr) =>
-        arr.map((l) =>
-          l.position > idx ? { ...l, position: l.position - 1 } : l,
-        ),
-      );
-      setCustomLayers((arr) =>
-        arr.map((c) =>
-          c.position > idx ? { ...c, position: c.position - 1 } : c,
-        ),
-      );
-      return ls.filter((l) => l.id !== id);
-    });
+    // Each setter runs with its own pure updater. Nesting the sibling setters
+    // inside setLayers would re-enqueue them on every StrictMode double-invoke,
+    // decrementing positions twice and shifting strip/DRAW slots out of place.
+    const idx = layers.findIndex((l) => l.id === id);
+    if (idx < 0) return;
+    setLayers((ls) => ls.filter((l) => l.id !== id));
+    setLabels((arr) =>
+      arr.map((l) =>
+        l.position > idx ? { ...l, position: l.position - 1 } : l,
+      ),
+    );
+    setCustomLayers((arr) =>
+      arr.map((c) =>
+        c.position > idx ? { ...c, position: c.position - 1 } : c,
+      ),
+    );
     setActivePanel((p) =>
       p?.kind === "layer" && p.layerId === id ? null : p,
     );

@@ -441,8 +441,8 @@ function decodeLayer(raw: unknown): Layer | null {
   if (!r.m || typeof r.m !== "object") return null;
   const mappings: Layer["mappings"] = {};
   for (const [k, v] of Object.entries(r.m as Record<string, unknown>)) {
-    if (!VALID_AES.has(k)) return null;
-    if (!isNonEmptyString(v)) return null;
+    if (!VALID_AES.has(k)) continue;
+    if (!isNonEmptyString(v)) continue;
     mappings[k as Aes] = v;
   }
 
