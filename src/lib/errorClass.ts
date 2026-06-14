@@ -45,6 +45,20 @@ export function isChartError(msg: string): boolean {
   return msg.startsWith(CHART_ERROR_PREFIX);
 }
 
+/** `Array.filter` predicate (true = keep) for pruning *stale* chart errors:
+ *  drop recoverable `Chart error: <body>` messages tied to an earlier query,
+ *  but keep unrecoverable ones (bare sentinel / "ggsql-wasm crashed") and any
+ *  non-chart error. Used when the current query yields nothing to draw. */
+export const dropStaleChartErrors = (msg: string): boolean =>
+  !isChartError(msg) || isUnrecoverableError(msg);
+
+/** `Array.filter` predicate (true = keep) for clearing *every* render error —
+ *  both chart errors and unrecoverable messages — once a frame draws (or a new
+ *  render error supersedes them). Leaves non-render errors (CSV / inspect
+ *  failures) untouched. */
+export const dropAllRenderErrors = (msg: string): boolean =>
+  !isUnrecoverableError(msg) && !isChartError(msg);
+
 /** A hard ggsql-wasm crash: the wasm linear memory is corrupted (heap OOB,
  *  a Rust `unreachable` panic, or a raw wasm `RuntimeError`). ggsql-wasm
  *  throws these under rapid / multi-layer `execute()` calls. Unlike a chart

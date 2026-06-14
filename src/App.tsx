@@ -47,7 +47,8 @@ import { clearLastCsv, loadLastCsv, saveLastCsv } from "./lib/csvStore";
 import { normalizeCsvHeader } from "./lib/csvNormalize";
 import { countConfiguredVariables } from "./lib/configSummary";
 import {
-  isChartError,
+  dropAllRenderErrors,
+  dropStaleChartErrors,
   isUnrecoverableError,
   isWasmCrashError,
 } from "./lib/errorClass";
@@ -560,9 +561,7 @@ export default function App() {
       // Nothing to render → any recoverable "Chart error:" is stale (it was
       // tied to an earlier query). Drop those, but keep unrecoverable wasm-
       // crash messages, which only a successful render (after a reload) clears.
-      setErrors((prev) =>
-        prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
-      );
+      setErrors((prev) => prev.filter(dropStaleChartErrors));
       // Vega warnings are tied to the render that produced them; with no
       // query they'd linger next to layer-skip warnings.
       setWarnings([]);
@@ -579,9 +578,7 @@ export default function App() {
             setVegaSpec(null);
             // The query parsed (hasVisual didn't throw) but has no visual to
             // draw — clear stale recoverable chart errors, same as above.
-            setErrors((prev) =>
-              prev.filter((m) => !isChartError(m) || isUnrecoverableError(m)),
-            );
+            setErrors((prev) => prev.filter(dropStaleChartErrors));
           }
           return;
         }
@@ -676,9 +673,7 @@ export default function App() {
           // Successful render clears any displayed chart errors and
           // unrecoverable messages — both are by definition stale once we've
           // drawn a frame (e.g. after the user reloaded past a wasm crash).
-          setErrors((prev) =>
-            prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
-          );
+          setErrors((prev) => prev.filter(dropAllRenderErrors));
           // Expose the just-rendered Vega-Lite spec to the bottom-pane tab.
           setVegaSpec(spec);
         }
@@ -700,13 +695,13 @@ export default function App() {
           // unrecoverable, so the chart pane shows a "Reload page" action.
           setErrors((prev) => [
             "ggsql-wasm crashed. Reload the page to recover — your chart settings and data are preserved.",
-            ...prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
+            ...prev.filter(dropAllRenderErrors),
           ]);
           return;
         }
         setErrors((prev) => [
           `Chart error: ${String(e)}`,
-          ...prev.filter((m) => !isUnrecoverableError(m) && !isChartError(m)),
+          ...prev.filter(dropAllRenderErrors),
         ]);
       }
     };
