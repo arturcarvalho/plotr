@@ -7,6 +7,14 @@ export type ToolId = "ggplot2" | "ggsql" | "plotr";
 // Display + cycle order on the explainer site (Tools listing and Next-tool nav).
 export const TOOL_IDS: readonly ToolId[] = ["plotr", "ggsql", "ggplot2"];
 
+/** The tool after / before `tool` in `TOOL_IDS`, or null at the ends — used by
+ *  the tool page's previous / next footer links, which hide at the first/last
+ *  tool rather than wrapping. */
+export const nextTool = (tool: ToolId): ToolId | null =>
+  TOOL_IDS[TOOL_IDS.indexOf(tool) + 1] ?? null;
+export const prevTool = (tool: ToolId): ToolId | null =>
+  TOOL_IDS[TOOL_IDS.indexOf(tool) - 1] ?? null;
+
 export type SiteRoute =
   | { kind: "about" }
   | { kind: "tool"; tool: ToolId };

@@ -1,9 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { matchSitePath, routeToPath, TOOL_IDS } from "./route";
+import {
+  matchSitePath,
+  nextTool,
+  prevTool,
+  routeToPath,
+  TOOL_IDS,
+} from "./route";
 
 describe("TOOL_IDS", () => {
   it("lists the tools in presentation order: plotr, ggsql, ggplot2", () => {
     expect(TOOL_IDS).toEqual(["plotr", "ggsql", "ggplot2"]);
+  });
+});
+
+describe("nextTool / prevTool", () => {
+  it("steps forward, null past the last", () => {
+    expect(nextTool("plotr")).toBe("ggsql");
+    expect(nextTool("ggsql")).toBe("ggplot2");
+    expect(nextTool("ggplot2")).toBeNull();
+  });
+
+  it("steps backward, null past the first", () => {
+    expect(prevTool("plotr")).toBeNull();
+    expect(prevTool("ggsql")).toBe("plotr");
+    expect(prevTool("ggplot2")).toBe("ggsql");
   });
 });
 

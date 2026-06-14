@@ -67,6 +67,36 @@ test.describe("explainer site", () => {
     await expect(page.getByText("DRAW smooth", { exact: true })).toHaveCount(0);
   });
 
+  test("tool page footer steps to the previous / next tool; hides at the ends", async ({
+    page,
+  }) => {
+    // Middle tool: both links present, Previous → plotr (not About).
+    await page.goto("/tool/ggsql");
+    await expect(
+      page.getByRole("link", { name: /Previous/ }),
+    ).toHaveAttribute("href", "/tool/plotr");
+    await expect(page.getByRole("link", { name: /Next/ })).toHaveAttribute(
+      "href",
+      "/tool/ggplot2",
+    );
+
+    // First tool: no Previous; Next → ggsql.
+    await page.goto("/tool/plotr");
+    await expect(page.getByRole("link", { name: /Previous/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Next/ })).toHaveAttribute(
+      "href",
+      "/tool/ggsql",
+    );
+
+    // Last tool: no Next; Previous → ggsql.
+    await page.goto("/tool/ggplot2");
+    await expect(page.getByRole("link", { name: /Next/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Previous/ })).toHaveAttribute(
+      "href",
+      "/tool/ggsql",
+    );
+  });
+
   test("legacy /tools resolves to About; the brand returns to the builder", async ({
     page,
   }) => {

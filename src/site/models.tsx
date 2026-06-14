@@ -302,7 +302,6 @@ interface ToolInfo {
   blurb: string;
   intro: string;
   strengths: string[];
-  bestFor: string[];
 }
 
 export const TOOLS_INFO: Record<ToolId, ToolInfo> = {
@@ -312,17 +311,12 @@ export const TOOLS_INFO: Record<ToolId, ToolInfo> = {
     tagline: "The grammar, realised in R.",
     blurb: "The R library that made the grammar famous.",
     intro:
-      "ggplot2 is the R implementation that made the Grammar of Graphics famous. You compose a plot by adding layers — data and aes(), then geoms, stats, scales, a coordinate system and a theme — building rich graphics piece by piece.",
+      "ggplot2 is the R implementation that made the Grammar of Graphics famous. You compose a plot by adding layers: data, geoms, stats, scales, a coordinate system and a theme — building rich graphics piece by piece.",
     strengths: [
       "The most complete, battle-tested grammar implementation.",
-      "A dedicated Statistics layer — summarise data as you plot it.",
+      "A dedicated Statistics layer. Summarise data as you plot it.",
       "A vast ecosystem of extensions and a Theme layer for fine control.",
-    ],
-    bestFor: [
-      "R users doing statistical analysis and reporting.",
-      "Publication-quality, highly customised figures.",
-      "Anyone who wants the grammar at full granularity.",
-    ],
+    ]
   },
   ggsql: {
     model: "ggsql",
@@ -335,12 +329,7 @@ export const TOOLS_INFO: Record<ToolId, ToolInfo> = {
       "Familiar SQL syntax — your existing knowledge transfers directly.",
       "Composable layers, scales and coordinates — one model for every plot.",
       "Built for humans and AI to read, write and verify.",
-    ],
-    bestFor: [
-      "Analysts who already live in SQL.",
-      "Charting straight from a database — even billions of rows.",
-      "AI agents generating visualizations safely.",
-    ],
+    ]
   },
   plotr: {
     model: "plotr",
@@ -348,16 +337,11 @@ export const TOOLS_INFO: Record<ToolId, ToolInfo> = {
     tagline: "Variables go in, ggsql comes out.",
     blurb: "A visual builder that writes ggsql for you.",
     intro:
-      "plotr is a visual builder for the grammar. Choose your variables and a chart type, and plotr writes the ggsql for you — the fastest way to feel how the layers fit together without memorising any syntax.",
+      "Plotr is a visual chart builder. Choose your variables and a chart type, and plotr writes the ggsql for you which in turn makes a chart. It's the fastest way to feel how the layers fit together without memorising any syntax.",
     strengths: [
       "No syntax to learn — build a chart by picking variables.",
       "Generates real, reproducible ggsql you can keep.",
       "The gentlest on-ramp to the whole grammar family.",
-    ],
-    bestFor: [
-      "Newcomers meeting the grammar for the first time.",
-      "Quick, exploratory charts without writing code.",
-      "Teaching how layers compose into a finished chart.",
-    ],
+    ]
   },
 };

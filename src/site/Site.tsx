@@ -21,6 +21,8 @@ import {
 } from "react";
 import {
   matchSitePath,
+  nextTool,
+  prevTool,
   routeToPath,
   type SiteRoute,
   type ToolId,
@@ -564,8 +566,8 @@ function ExtArrow() {
 // ── Tool page (live widget embedded) ────────────────────────────────────────────
 function ToolPage({ link, tool }: { link: Link; tool: ToolId }) {
   const t = TOOLS_INFO[tool];
-  const idx = TOOL_IDS.indexOf(tool);
-  const next = TOOL_IDS[(idx + 1) % TOOL_IDS.length];
+  const prev = prevTool(tool);
+  const next = nextTool(tool);
   return (
     <>
       <TopBar
@@ -621,10 +623,20 @@ function ToolPage({ link, tool }: { link: Link; tool: ToolId }) {
             borderTop: `1px solid ${CK.line}`,
           }}
         >
-          <CTA {...link({ kind: "about" })}>← About</CTA>
-          <CTA {...link({ kind: "tool", tool: next })}>
-            Next: {TOOLS_INFO[next].name} →
-          </CTA>
+          {prev ? (
+            <CTA {...link({ kind: "tool", tool: prev })}>
+              ← Previous: {TOOLS_INFO[prev].name}
+            </CTA>
+          ) : (
+            <span />
+          )}
+          {next ? (
+            <CTA {...link({ kind: "tool", tool: next })}>
+              Next: {TOOLS_INFO[next].name} →
+            </CTA>
+          ) : (
+            <span />
+          )}
         </div>
       </div>
     </>
