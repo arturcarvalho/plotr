@@ -6,6 +6,7 @@ import {
   CHART_LABELS,
   computeMissingRequired,
   DRAW_TYPES,
+  pruneColorScales,
   type Aes,
   type CustomLayer,
   type Layer,
@@ -1387,6 +1388,80 @@ describe("buildQuery emits SCALE for palettes (chart-level scales)", () => {
     });
     expect(out).toContain("SCALE fill TO set1");
     expect(out).not.toContain("reverse");
+  });
+});
+
+describe("pruneColorScales (drop the unreachable opposite-kind palette slot)", () => {
+  it("discrete mode drops the continuous palette + reverse slots", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteDiscrete: "set1",
+      fillPaletteContinuous: "viridis",
+      fillPaletteContinuousReverse: true,
+    });
+    expect(out).toEqual({ fillPaletteDiscrete: "set1" });
+  });
+
+  it("continuous mode drops the discrete palette + reverse slots", () => {
+    const out = pruneColorScales("fill", "continuous", {
+      fillPaletteContinuous: "viridis",
+      fillPaletteDiscrete: "set1",
+      fillPaletteDiscreteReverse: true,
+    });
+    expect(out).toEqual({ fillPaletteContinuous: "viridis" });
+  });
+
+  it("keeps the active-kind palette + reverse untouched", () => {
+    const scales: ScaleSettings = {
+      fillPaletteDiscrete: "set1",
+      fillPaletteDiscreteReverse: true,
+    };
+    expect(pruneColorScales("fill", "discrete", scales)).toEqual(scales);
+  });
+
+  it("only prunes the requested aesthetic — stroke slots survive a fill prune", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteContinuous: "viridis",
+      strokePaletteContinuous: "magma",
+    });
+    expect(out).toEqual({ strokePaletteContinuous: "magma" });
+  });
+
+  it("prunes the stroke aesthetic independently", () => {
+    const out = pruneColorScales("stroke", "continuous", {
+      strokePaletteDiscrete: "tableau10",
+      strokePaletteDiscreteReverse: true,
+      strokePaletteContinuous: "magma",
+    });
+    expect(out).toEqual({ strokePaletteContinuous: "magma" });
+  });
+
+  it("fixed mode preserves both palettes (transient unmap must not lose a pick)", () => {
+    const scales: ScaleSettings = {
+      fillPaletteDiscrete: "set1",
+      fillPaletteContinuous: "viridis",
+    };
+    expect(pruneColorScales("fill", "fixed", scales)).toEqual(scales);
+  });
+
+  it("drops a reverse-only opposite slot (no palette set)", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteContinuousReverse: true,
+    });
+    expect(out).toEqual({});
+  });
+
+  it("returns the SAME reference when nothing needs pruning (skips a no-op write)", () => {
+    const scales: ScaleSettings = { fillPaletteDiscrete: "set1" };
+    expect(pruneColorScales("fill", "discrete", scales)).toBe(scales);
+  });
+
+  it("leaves axis scale settings alone", () => {
+    const out = pruneColorScales("fill", "discrete", {
+      fillPaletteContinuous: "viridis",
+      xFormat: "{:num %.0f}",
+      yBreaks: "0, 10",
+    });
+    expect(out).toEqual({ xFormat: "{:num %.0f}", yBreaks: "0, 10" });
   });
 });
 

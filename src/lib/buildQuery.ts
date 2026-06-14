@@ -364,6 +364,36 @@ export function colorKeys(aes: "fill" | "stroke") {
   } as const;
 }
 
+/** Strip the palette + reverse slots for the colour mode that isn't active, so
+ *  a palette set under one mode can't linger once the mapped column's kind
+ *  flips the panel to the other mode. Without this, e.g. a continuous palette
+ *  set while fill mapped a continuous column keeps emitting `SCALE fill TO
+ *  <continuous palette>` after fill is re-mapped to a discrete column — and the
+ *  panel (which now shows only the discrete picker) offers no control to clear
+ *  it. `mode === "fixed"` (no column mapped) prunes nothing: a transient unmap
+ *  between two same-kind mappings must not lose the user's palette pick, mirror-
+ *  ing the settings-preservation contract in App's resolved-draw effect.
+ *
+ *  Returns the same object reference when nothing changed so callers can skip a
+ *  no-op state write. */
+export function pruneColorScales(
+  aes: "fill" | "stroke",
+  mode: "fixed" | "discrete" | "continuous",
+  scales: ScaleSettings,
+): ScaleSettings {
+  const k = colorKeys(aes);
+  const drop: (keyof ScaleSettings)[] =
+    mode === "discrete"
+      ? [k.continuous, k.continuousRev]
+      : mode === "continuous"
+        ? [k.discrete, k.discreteRev]
+        : [];
+  if (!drop.some((key) => scales[key] !== undefined)) return scales;
+  const next = { ...scales };
+  for (const key of drop) delete next[key];
+  return next;
+}
+
 function scaleClausesFor(
   aes: "fill" | "stroke",
   scales: ScaleSettings | undefined,

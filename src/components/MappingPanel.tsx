@@ -8,7 +8,7 @@ import Select, {
   type StylesConfig,
 } from "react-select";
 import type { Aes, LayerSettings, ScaleSettings } from "../lib/buildQuery";
-import { colorKeys } from "../lib/buildQuery";
+import { colorKeys, pruneColorScales } from "../lib/buildQuery";
 import { ClearButton } from "./ClearButton";
 import { NumberField } from "./NumberField";
 import { Switch } from "./Switch";
@@ -410,6 +410,15 @@ function ColorAestheticPanel({
   onChangeSettings: (next: LayerSettings) => void;
   onChangeScales: (next: ScaleSettings) => void;
 }) {
+  // The mapped column's kind picks the mode; the opposite-kind palette slot is
+  // then unreachable from this panel. Prune it so it can't keep emitting a
+  // SCALE clause the user can no longer see or clear. Converges in one pass —
+  // pruneColorScales returns the same reference once there's nothing to drop.
+  useEffect(() => {
+    const pruned = pruneColorScales(aes, mode, scales);
+    if (pruned !== scales) onChangeScales(pruned);
+  }, [aes, mode, scales, onChangeScales]);
+
   // Fixed colour is per-layer (settings); the palettes are chart-level scales.
   const {
     discrete: discreteKey,
