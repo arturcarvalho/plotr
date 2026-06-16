@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import App from "./App.tsx";
+import { BuilderRoot } from "./BuilderRoot.tsx";
 import { Site } from "./site/Site.tsx";
 import { matchSitePath } from "./lib/route.ts";
 
@@ -10,5 +10,7 @@ import { matchSitePath } from "./lib/route.ts";
 const siteRoute = matchSitePath(window.location.pathname);
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>{siteRoute ? <Site initial={siteRoute} /> : <App />}</StrictMode>,
+  <StrictMode>
+    {siteRoute ? <Site initial={siteRoute} /> : <BuilderRoot />}
+  </StrictMode>,
 );
