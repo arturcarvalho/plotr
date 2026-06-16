@@ -1,11 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
-import { EXAMPLE_HASH, seedTutorialSeen } from "./fixtures";
+import { EXAMPLE_HASH, seedGettingStartedDismissed } from "./fixtures";
 
 // EXAMPLE_HASH hydrates a penguins chart with two layer cards:
 // "Scatter plot" (DRAW point) and "Smooth line" (DRAW smooth).
 
 test.beforeEach(async ({ page }) => {
-  await seedTutorialSeen(page);
+  await seedGettingStartedDismissed(page);
 });
 
 const chartMark = (page: Page) => page.locator(".vega-embed svg path").first();

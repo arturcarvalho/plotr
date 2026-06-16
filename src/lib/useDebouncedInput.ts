@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Pauses shorter than this don't commit the value upstream. Sits on top of
  *  App's ~200 ms render debounce. */
@@ -21,29 +21,36 @@ export function useDebouncedInput(
   // (echoing back through `value`) apart from a genuine external change.
   const lastCommitted = useRef(value);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revision = useRef(0);
+
+  const cancelPending = useCallback(() => {
+    revision.current += 1;
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, []);
 
   // Adopt external changes (reset, layer switch, URL navigation) — but ignore
   // `value` re-arriving as the value we just committed, which would clobber
   // any typing the user has done since.
   useEffect(() => {
     if (value !== lastCommitted.current) {
+      cancelPending();
       lastCommitted.current = value;
       setLocal(value);
     }
-  }, [value]);
+  }, [value, cancelPending]);
 
   useEffect(
     () => () => {
-      if (timer.current) clearTimeout(timer.current);
+      cancelPending();
     },
-    [],
+    [cancelPending],
   );
 
   const commit = (v: string) => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
+    cancelPending();
     if (v === lastCommitted.current) return;
     lastCommitted.current = v;
     onChange(v);
@@ -54,8 +61,12 @@ export function useDebouncedInput(
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
       const v = e.target.value;
       setLocal(v);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => commit(v), delayMs);
+      cancelPending();
+      const scheduledRevision = revision.current;
+      timer.current = setTimeout(() => {
+        if (scheduledRevision !== revision.current) return;
+        commit(v);
+      }, delayMs);
     },
     onBlur: () => commit(local),
     onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {

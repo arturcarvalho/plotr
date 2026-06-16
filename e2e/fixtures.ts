@@ -1,4 +1,10 @@
 import type { Page } from "@playwright/test";
+import { gzipSync } from "node:zlib";
+
+export function stateHash(payload: object): string {
+  const bytes = gzipSync(JSON.stringify({ v: 2, ...payload }));
+  return `#s=${bytes.toString("base64url")}`;
+}
 
 // A known-good chart hash: penguins scatter (bill_dep × body_mass, coloured by
 // species) + a smooth trend overlay. Navigating to `/${EXAMPLE_HASH}` rebuilds
@@ -14,12 +20,12 @@ export const EXAMPLE_HASH =
 export const TEXT_MISSING_LABEL_HASH =
   "#s=H4sIAAAAAAAAE42PzWpDIRCF32WylRJCE4K7QnftG5QQ7HVyK_Gq9Sdcc_HdMya1CN3Uleeb4xzPAhfgGwbvwD8WUMDBamnsLgEDSUqkaOk6AV9gJv2ptD5KdMRylVbm4yRCIH2iEaHgcFAYoDAI9ZUFvn7aM7gC3zIwxKJPWAp7xJ2fv-Rmf_2JizjHf8W17Weiq_X9QCkHBpHAOIZvzR2aMSlTv_bSrFpk9AT6orTqtc0n4ZwyIzlEdTgxqJir4606WjUqGf3DpoIWRvbk_mWNhphJE3o1NFh79PCklXPo_5p_W_Y04NzHZBS-m5dyA9KrI0XKAQAA";
 
-// Mark the first-run tutorial as already seen so its overlay can't intercept
-// clicks. Runs before any page script on every navigation in the test.
-export async function seedTutorialSeen(page: Page): Promise<void> {
+// Mark the Getting started card as dismissed so it can't cover the chart area
+// during tests. Runs before any page script on every navigation in the test.
+export async function seedGettingStartedDismissed(page: Page): Promise<void> {
   await page.addInitScript(() => {
     try {
-      localStorage.setItem("plotr.tutorialSeen", "1");
+      localStorage.setItem("plotr.gettingStartedDismissed", "1");
     } catch {
       /* private mode — ignore */
     }

@@ -15,6 +15,7 @@ import {
   FACETS,
   layerDrawClause,
   missingRequiredWarnings,
+  normalizeColorScales,
   UNIVERSAL_AESTHETICS,
   type Aes,
   type CustomLayer,
@@ -48,6 +49,7 @@ import { normalizeCsvHeader } from "./lib/csvNormalize";
 import { countConfiguredVariables } from "./lib/configSummary";
 import {
   dropAllRenderErrors,
+  dropCsvLoadErrors,
   dropStaleChartErrors,
   isUnrecoverableError,
   isWasmCrashError,
@@ -68,8 +70,8 @@ import {
 } from "./components/SharedMappingsPanel";
 import { NoDataCard, Viz } from "./components/Viz";
 import { ProblemsPanel } from "./components/ProblemsPanel";
-import { TutorialOverlay } from "./components/Tutorial";
-import { isSeen, markSeen } from "./lib/tutorial";
+import { GettingStartedCard } from "./components/GettingStartedCard";
+import { dismiss, isDismissed } from "./lib/gettingStarted";
 import { newId } from "./lib/id";
 import { BottomTabs, type Tab as BottomTab } from "./components/BottomTabs";
 
@@ -99,6 +101,7 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
+  const [columnsTable, setColumnsTable] = useState<string | null>(null);
   // First 100 rows of the active table, for the bottom Data tab.
   const [dataPreview, setDataPreview] = useState<SqlResult | null>(null);
   // Additive in-memory cache of column name → kind. Seeded each time a table's
@@ -119,9 +122,15 @@ export default function App() {
     Partial<Record<Aes, string>>
   >({});
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
-  const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3 | null>(() =>
-    isSeen() ? null : 1,
-  );
+  // Getting started card visibility. Persisted dismissal ("Don't show this
+  // again") survives reloads; the session close (X) hides it only until the
+  // next reload. The card shows until a chart exists (see `showGettingStarted`).
+  const [cardDismissed, setCardDismissed] = useState(() => isDismissed());
+  const [cardClosed, setCardClosed] = useState(false);
+  const dismissCard = () => {
+    dismiss();
+    setCardDismissed(true);
+  };
   const [secondaryPanel, setSecondaryPanel] = useState<SecondaryPanel>(null);
   const [bottomTab, setBottomTab] = useState<BottomTab>("ggsql");
   // Latest Vega-Lite spec ggsql produced for the bottom-pane `vega-lite` tab.
@@ -136,6 +145,8 @@ export default function App() {
   // registered — otherwise `describeColumns(activeTable)` would race the
   // re-registration and error.
   const pendingActiveTableRef = useRef<string | null>(null);
+  const restoringHistoryRef = useRef(false);
+  const historyTableRef = useRef<string | null>(null);
 
   // Render debounce: each `query` change clears the pending render and
   // reschedules it CHART_DEBOUNCE_MS in the future. While the user is
@@ -176,8 +187,7 @@ export default function App() {
         }
       }
       // If the hash had a valid panel selection, restore it. Otherwise fall
-      // back to the first-layer auto-open default (skipped during tutorial
-      // step 1 so step 2 needs the user to click the layer card themselves).
+      // back to the first-layer auto-open default.
       if (restoredActivePanel) {
         setActivePanel(restoredActivePanel);
         if (
@@ -186,7 +196,7 @@ export default function App() {
         ) {
           setSecondaryPanel(restoredSecondaryPanel);
         }
-      } else if (firstLayerId && tutorialStep !== 1) {
+      } else if (firstLayerId) {
         setActivePanel({ kind: "layer", layerId: firstLayerId });
       }
       setHydrated(true);
@@ -329,6 +339,8 @@ export default function App() {
         // A hash-less entry (clean URL) is the empty state — reset to cold
         // start. A non-empty but undecodable `s=` is malformed: keep current.
         if (!/(?:^|[#&])s=/.test(hash)) {
+          restoringHistoryRef.current = true;
+          historyTableRef.current = null;
           setLayers([initialLayer()]);
           setLabels([]);
           setCustomLayers([]);
@@ -342,6 +354,8 @@ export default function App() {
         }
         return;
       }
+      restoringHistoryRef.current = true;
+      historyTableRef.current = data.activeTable;
       setLayers(data.layers.length > 0 ? data.layers : [initialLayer()]);
       setLabels(data.labels);
       setCustomLayers(data.customLayers ?? []);
@@ -414,6 +428,7 @@ export default function App() {
   useEffect(() => {
     if (!activeTable) {
       setColumns([]);
+      setColumnsTable(null);
       setDataPreview(null);
       return;
     }
@@ -421,6 +436,7 @@ export default function App() {
     try {
       const next = ggsql.describeColumns(activeTable);
       setColumns(next);
+      setColumnsTable(activeTable);
       // execute_sql caps results at 100 rows and reports the table's real
       // total via total_rows/truncated — exactly the Data-tab preview shape.
       setDataPreview(ggsql.executeSql(`SELECT * FROM ${activeTable}`));
@@ -435,6 +451,7 @@ export default function App() {
     } catch (e) {
       setErrors((prev) => [`Failed to inspect "${activeTable}": ${e}`, ...prev]);
       setColumns([]);
+      setColumnsTable(activeTable);
       setDataPreview(null);
     }
   }, [activeTable, ready]);
@@ -527,6 +544,20 @@ export default function App() {
   useEffect(() => {
     const prev = prevResolvedRef.current;
     const next = resolvedDrawByLayerId;
+    if (restoringHistoryRef.current) {
+      const targetTable = historyTableRef.current;
+      const tableSettled =
+        activeTable === targetTable && columnsTable === targetTable;
+      if (!tableSettled) return;
+      const baseline: Record<string, string> = {};
+      for (const [id, draw] of Object.entries(next)) {
+        if (draw !== null) baseline[id] = draw;
+      }
+      prevResolvedRef.current = baseline;
+      restoringHistoryRef.current = false;
+      historyTableRef.current = null;
+      return;
+    }
     const changedIds: string[] = [];
     const updated: Record<string, string> = { ...prev };
     for (const [id, draw] of Object.entries(next)) {
@@ -547,7 +578,20 @@ export default function App() {
       });
       return mutated ? out : ls;
     });
-  }, [resolvedDrawByLayerId]);
+  }, [activeTable, columnsTable, resolvedDrawByLayerId]);
+
+  // Palette slots are chart-level and must follow the effective mapping even
+  // when no colour settings panel is mounted.
+  useEffect(() => {
+    if (!activeTable || columnsTable !== activeTable) return;
+    const normalized = normalizeColorScales(
+      layers,
+      sharedMappings,
+      columns,
+      scales,
+    );
+    if (normalized !== scales) setScales(normalized);
+  }, [activeTable, columnsTable, columns, layers, scales, sharedMappings]);
 
   // Build + render chart whenever inputs change. Debounced by
   // CHART_DEBOUNCE_MS so rapid input doesn't queue vega-embed / ggsql.execute
@@ -728,13 +772,13 @@ export default function App() {
       const normalized = normalizeCsvHeader(bytes);
       ggsql.registerCsv(name, normalized);
       setActiveTable(name);
+      setErrors((prev) => prev.filter(dropCsvLoadErrors));
       // Best-effort: persist the bytes so a reload re-registers automatically.
       // Failure (private mode quota, browser without IDB, etc.) shouldn't
       // break the upload flow.
       void saveLastCsv(name, normalized).catch((e) => {
         console.warn("Failed to persist uploaded CSV to IndexedDB:", e);
       });
-      if (tutorialStep === 1) setTutorialStep(2);
     } catch (e) {
       setErrors((prev) => [`Failed to load CSV "${name}": ${e}`, ...prev]);
     }
@@ -742,7 +786,6 @@ export default function App() {
 
   const onLoadPenguins = () => {
     setActiveTable("ggsql:penguins");
-    if (tutorialStep === 1) setTutorialStep(2);
   };
 
   const onChangeDraw = (id: string, draw: string) =>
@@ -758,12 +801,6 @@ export default function App() {
   const onChangeSettings = (id: string, settings: LayerSettings) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, settings } : l)));
 
-  // Step 3 (the final tutorial step) completes when a variable gets mapped.
-  const completeTutorial = () => {
-    markSeen();
-    setTutorialStep(null);
-  };
-
   const onMap = (id: string, aes: Aes, col: string | undefined) => {
     if (id === SHARED_MAPPINGS_KEY) {
       setSharedMappings((cur) => {
@@ -772,7 +809,6 @@ export default function App() {
         delete next[aes];
         return next;
       });
-      if (col && tutorialStep === 3) completeTutorial();
       return;
     }
     setLayers((ls) =>
@@ -787,7 +823,6 @@ export default function App() {
         return { ...l, draw, mappings };
       }),
     );
-    if (col && tutorialStep === 3) completeTutorial();
   };
 
   const onDrop = (
@@ -811,7 +846,6 @@ export default function App() {
         return mappings === l.mappings ? l : { ...l, draw, mappings };
       }),
     );
-    if (tutorialStep === 3) completeTutorial();
     setSharedMappings((cur) => {
       let next = cur;
       if (src && src.layerId === SHARED_MAPPINGS_KEY) {
@@ -851,7 +885,6 @@ export default function App() {
     setLayers((ls) => [...ls, layer]);
     setActivePanel({ kind: "layer", layerId: layer.id });
     setSecondaryPanel(null);
-    if (tutorialStep === 2) setTutorialStep(3);
   };
 
   const onToggleLayerDisabled = (id: string) => {
@@ -1019,7 +1052,6 @@ export default function App() {
         : { kind: "layer", layerId },
     );
     setSecondaryPanel(null);
-    if (tutorialStep === 2) setTutorialStep(3);
   };
   const toggleMappingPanel = (aes: Aes) =>
     setSecondaryPanel((s) =>
@@ -1039,11 +1071,14 @@ export default function App() {
       UNIVERSAL_AESTHETICS.some((a) => l.mappings[a]),
     ) ||
     customLayers.some((c) => !c.disabled && c.ggsql.trim().length > 0);
-  // Cold-start (neither a CSV nor a chart configured) keeps the right pane
-  // hidden so the tutorial overlay can call the user's attention to the data
-  // panel. Once they've built up a chart, the pane stays visible even after a
-  // file reset — the no-data card below explains what's missing.
+  // Cold-start (neither a CSV nor a chart configured) keeps the right pane's
+  // chart area empty. Once they've built up a chart, the pane stays visible
+  // even after a file reset — the no-data card below explains what's missing.
   const isEmpty = !activeTable && !hasMappings;
+  // The Getting started card shows only at cold start (no data loaded) and
+  // disappears the moment a dataset is selected. A persisted "Don't show this
+  // again" or the session X (cardClosed) also hide it.
+  const showGettingStarted = isEmpty && !cardDismissed && !cardClosed;
   const noData = !activeTable && hasMappings;
   const noDataVariables = useMemo(() => {
     if (!noData) return [];
@@ -1093,16 +1128,16 @@ export default function App() {
       : null;
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-app-chrome">
-      {tutorialStep !== null && <TutorialOverlay step={tutorialStep} />}
       <main className="relative flex min-h-0 flex-1">
         <div
           className={[
             "flex min-h-0 p-2",
-            // When the chart is configured but no CSV is loaded, the build/
-            // chart side panels are hidden — collapse this column to fit the
-            // DataPanel only so the section to the right spans all remaining
-            // width and the no-data card centers across that whole strip.
-            noData ? "" : "flex-1",
+            // With no CSV loaded the build / chart side panels are hidden, so
+            // collapse this column to fit the DataPanel only. The section to
+            // the right then spans all remaining width, centering whatever it
+            // holds (the Getting started card at cold start, or the no-data
+            // card) across that whole empty strip.
+            activeTable ? "flex-1" : "",
           ].join(" ")}
         >
             <DataPanel
@@ -1179,7 +1214,9 @@ export default function App() {
                   />
                 ) : activePanel?.kind === "layer" && panelLayer ? (
                   <ChartPanel
+                    key={panelLayer.id}
                     layer={panelLayer}
+                    facetMappings={sharedMappings}
                     resolvedDraw={
                       resolvedDrawByLayerId[panelLayer.id] ?? null
                     }
@@ -1192,6 +1229,13 @@ export default function App() {
                     onDrop={(aes, col, src) =>
                       onDrop(panelLayer.id, aes, col, src)
                     }
+                    onMapFacet={(aes, col) =>
+                      onMap(SHARED_MAPPINGS_KEY, aes, col)
+                    }
+                    onDropFacet={(aes, col, src) =>
+                      onDrop(SHARED_MAPPINGS_KEY, aes, col, src)
+                    }
+                    facetSourceId={SHARED_MAPPINGS_KEY}
                     onToggleMappingSettings={toggleMappingPanel}
                     onOpenSettings={toggleSettingsPanel}
                     onChangeSettings={(s) =>
@@ -1219,6 +1263,7 @@ export default function App() {
                 </div>
                 {secondaryPanel?.kind === "settings" && panelLayer ? (
                   <ChartTypePanel
+                    key={panelLayer.id}
                     resolvedDraw={
                       resolvedDrawByLayerId[panelLayer.id] ?? null
                     }
@@ -1232,14 +1277,18 @@ export default function App() {
                   />
                 ) : secondaryPanel?.kind === "mapping" && panelLayer ? (
                   <MappingPanel
+                    key={`${panelLayer.id}:${secondaryPanel.aes}`}
                     aes={secondaryPanel.aes}
                     resolvedDraw={resolvedDrawByLayerId[panelLayer.id] ?? null}
                     settings={panelLayer.settings ?? {}}
                     scales={scales}
                     mappingKind={resolveMappingKind(
                       columns,
-                      panelLayer.mappings[secondaryPanel.aes] ??
-                        sharedMappings[secondaryPanel.aes],
+                      secondaryPanel.aes === "facet_col" ||
+                        secondaryPanel.aes === "facet_row"
+                        ? sharedMappings[secondaryPanel.aes]
+                        : panelLayer.mappings[secondaryPanel.aes] ??
+                            sharedMappings[secondaryPanel.aes],
                     )}
                     onChangeSettings={(s) =>
                       onChangeSettings(panelLayer.id, s)
@@ -1252,7 +1301,19 @@ export default function App() {
             )}
           </div>
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-app-chrome py-2 pr-2">
-          {isEmpty ? null : noData ? (
+          {isEmpty ? (
+            showGettingStarted ? (
+              // `-mr-2` cancels the section's `pr-2` so the card centers across
+              // the full empty strip (left column's right edge to the window
+              // edge), matching the no-data card below.
+              <div className="-mr-2 flex h-full w-full items-center justify-center p-6">
+                <GettingStartedCard
+                  onClose={() => setCardClosed(true)}
+                  onDontShowAgain={dismissCard}
+                />
+              </div>
+            ) : null
+          ) : noData ? (
             // `-mr-2` cancels the section's `pr-2` so the card centers between
             // the left column's right edge and the actual window right edge,
             // not between the column and the chrome-padded content area.

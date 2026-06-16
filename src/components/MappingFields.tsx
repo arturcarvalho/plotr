@@ -7,6 +7,9 @@ import { ChevronRightIcon } from "./icons";
 interface Props {
   mappings: Partial<Record<Aes, string>>;
   sourceId: string;
+  /** Chart-wide facet mappings shown from a layer panel. */
+  facetMappings?: Partial<Record<Aes, string>>;
+  facetSourceId?: string;
   /** Resolved draw of the owning layer; when omitted (e.g. shared mappings),
    *  geom-conditional rows are hidden. */
   resolvedDraw?: string | null;
@@ -16,6 +19,12 @@ interface Props {
   openMappingAes?: Aes | null;
   onMap: (aes: Aes, col: string | undefined) => void;
   onDrop: (
+    aes: Aes,
+    col: string,
+    src?: { layerId: string; aes: Aes },
+  ) => void;
+  onMapFacet?: (aes: Aes, col: string | undefined) => void;
+  onDropFacet?: (
     aes: Aes,
     col: string,
     src?: { layerId: string; aes: Aes },
@@ -32,11 +41,15 @@ interface Props {
 export function MappingFields({
   mappings,
   sourceId,
+  facetMappings,
+  facetSourceId,
   resolvedDraw,
   missingRequired,
   openMappingAes,
   onMap,
   onDrop,
+  onMapFacet,
+  onDropFacet,
   onToggleSettings,
   partition,
   onAddPartition,
@@ -45,16 +58,28 @@ export function MappingFields({
   const isMissing = (aes: Aes) =>
     missingRequired ? missingRequired.includes(aes) : false;
 
-  const dropzoneFor = (aes: Aes, placeholder?: string) => (
-    <Dropzone
-      placeholder={placeholder}
-      value={mappings[aes]}
-      required={isMissing(aes)}
-      source={{ layerId: sourceId, aes }}
-      onDrop={(c, src) => onDrop(aes, c, src)}
-      onClear={() => onMap(aes, undefined)}
-    />
-  );
+  const dropzoneFor = (aes: Aes, placeholder?: string) => {
+    const facet = aes === "facet_row" || aes === "facet_col";
+    return (
+      <Dropzone
+        placeholder={placeholder}
+        value={facet && facetMappings ? facetMappings[aes] : mappings[aes]}
+        required={isMissing(aes)}
+        source={{
+          layerId: facet && facetSourceId ? facetSourceId : sourceId,
+          aes,
+        }}
+        onDrop={(c, src) =>
+          facet && onDropFacet ? onDropFacet(aes, c, src) : onDrop(aes, c, src)
+        }
+        onClear={() =>
+          facet && onMapFacet
+            ? onMapFacet(aes, undefined)
+            : onMap(aes, undefined)
+        }
+      />
+    );
+  };
 
   // Standalone labelled mapping row — the whole Field (label + padding +
   // dropzone-row) is one click target. Used for every aesthetic except
@@ -89,9 +114,7 @@ export function MappingFields({
 
   return (
     <div className="space-y-3">
-      <div data-tutorial-target="mappings">
-        {labeledField("x", "X", "Bottom Axis")}
-      </div>
+      {labeledField("x", "X", "Bottom Axis")}
       {labeledField("y", "Y", "Left Axis")}
       {(resolvedDraw === "ribbon" || resolvedDraw === "range") && (
         <>
@@ -290,4 +313,3 @@ function DropzoneRow({
     </div>
   );
 }
-

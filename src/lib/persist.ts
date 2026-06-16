@@ -15,6 +15,7 @@ import {
   type ScaleSettings,
 } from "./buildQuery";
 import type { ColumnKind } from "./ggsql";
+import { normalizeFacetMappings } from "./facetMappings";
 import { newId } from "./id";
 
 const VALID_KINDS: ReadonlySet<string> = new Set<string>([
@@ -746,11 +747,15 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
         .map(decodeCustom)
         .filter((c): c is CustomLayer => c !== null)
     : undefined;
-  const out: Persisted = {
+  const normalizedFacets = normalizeFacetMappings(
     layers,
+    decodeMappings(obj.S),
+  );
+  const out: Persisted = {
+    layers: normalizedFacets.layers,
     labels,
     project: decodeProject(obj.P),
-    sharedMappings: decodeMappings(obj.S),
+    sharedMappings: normalizedFacets.sharedMappings,
     activeTable:
       typeof obj.t === "string" && obj.t.length > 0 ? obj.t : null,
   };
@@ -772,7 +777,12 @@ export async function deserialize(hash: string): Promise<Persisted | null> {
     }
   }
   if (Object.keys(scales).length > 0) out.scales = scales;
-  const activePanel = decodeActivePanel(obj.A, layers, labels, customLayers);
+  const activePanel = decodeActivePanel(
+    obj.A,
+    normalizedFacets.layers,
+    labels,
+    customLayers,
+  );
   if (activePanel) out.activePanel = activePanel;
   const secondaryPanel = decodeSecondaryPanel(obj.D, activePanel);
   if (secondaryPanel) out.secondaryPanel = secondaryPanel;

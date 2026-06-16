@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dropAllRenderErrors,
+  dropCsvLoadErrors,
   dropStaleChartErrors,
   isChartError,
   isUnrecoverableError,
@@ -170,5 +171,19 @@ describe("dropAllRenderErrors", () => {
   it("keeps non-render errors (CSV / inspect failures, warnings)", () => {
     expect(dropAllRenderErrors("Failed to inspect 'foo': bar")).toBe(true);
     expect(dropAllRenderErrors("warning: something")).toBe(true);
+  });
+});
+
+describe("dropCsvLoadErrors", () => {
+  it("drops stale CSV load failures and keeps unrelated errors", () => {
+    const errors = [
+      'Failed to load CSV "broken": parse error',
+      "Chart error: bad mapping",
+      "Failed to inspect 'other': missing",
+    ];
+    expect(errors.filter(dropCsvLoadErrors)).toEqual([
+      "Chart error: bad mapping",
+      "Failed to inspect 'other': missing",
+    ]);
   });
 });

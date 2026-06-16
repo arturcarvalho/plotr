@@ -2,6 +2,12 @@
 
 Instructions for Claude when working on this project.
 
+## Writing
+- Avoid using em dashes.
+
+## Git
+- Don't create commits unless I ask you. 
+
 ## TDD is mandatory
 
 Before implementing any new feature or changing existing behaviour, follow **red/green TDD**:
