@@ -45,7 +45,7 @@ test.describe("explainer site", () => {
     await expect(page.locator('input[type="range"]')).toBeVisible();
   });
 
-  test("Layer-Reveal: slider drives the %, smooth toggle adds/removes the trend layer", async ({
+  test("Layer-Reveal: slider drives the %, smooth row toggles the trend layer", async ({
     page,
   }) => {
     await page.goto("/tool/ggsql");
@@ -60,11 +60,68 @@ test.describe("explainer site", () => {
       page.locator("pre").getByText("SELECT", { exact: true }),
     ).toBeVisible();
 
-    // smooth is on by default → the trend layer is in the legend; toggling removes it
-    const toggle = page.locator("button[aria-pressed]");
+    // smooth is on by default and controlled from its own legend row.
     await expect(page.getByText("DRAW smooth", { exact: true })).toBeVisible();
-    await toggle.click();
-    await expect(page.getByText("DRAW smooth", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("smooth", { exact: true })).toHaveCount(0);
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          function rowForLabel(label: string): Element | null {
+            const spans = [...document.querySelectorAll("span")];
+            const labelEl = spans.find((el) => el.textContent === label);
+            let el = labelEl?.parentElement ?? null;
+            while (el && el !== document.body) {
+              const style = getComputedStyle(el);
+              if (
+                style.position === "relative" &&
+                style.marginLeft === "-9px" &&
+                style.paddingLeft === "9px"
+              ) {
+                return el;
+              }
+              el = el.parentElement;
+            }
+            return null;
+          }
+
+          return Object.fromEntries(
+            [
+              "SELECT",
+              "VISUALIZE",
+              "DRAW Points",
+              "DRAW smooth",
+              "SCALE",
+              "LABEL",
+            ].map((label) => [
+              label,
+              rowForLabel(label)?.querySelectorAll("svg").length ?? 0,
+            ]),
+          );
+        }),
+      )
+      .toEqual({
+        SELECT: 0,
+        VISUALIZE: 0,
+        "DRAW Points": 0,
+        "DRAW smooth": 1,
+        SCALE: 0,
+        LABEL: 0,
+      });
+
+    const hideSmooth = page.getByRole("button", {
+      name: "Hide smooth layer",
+    });
+    await expect(hideSmooth).toHaveAttribute("aria-pressed", "true");
+    await hideSmooth.click();
+
+    await expect(page.getByText("DRAW smooth", { exact: true })).toBeVisible();
+    const showSmooth = page.getByRole("button", {
+      name: "Show smooth layer",
+    });
+    await expect(showSmooth).toHaveAttribute("aria-pressed", "false");
+    await showSmooth.click();
+
+    await expect(hideSmooth).toHaveAttribute("aria-pressed", "true");
   });
 
   test("tool page footer steps to the previous / next tool; hides at the ends", async ({

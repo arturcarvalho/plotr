@@ -103,6 +103,8 @@ function LegendRow({
   hovered,
   hoverBg,
   faded,
+  muted,
+  toggle,
   onEnter,
   onLeave,
 }: {
@@ -114,9 +116,16 @@ function LegendRow({
   hovered: boolean;
   hoverBg: string;
   faded: boolean;
+  muted?: boolean;
+  toggle?: {
+    on: boolean;
+    onChange: () => void;
+    label: string;
+  };
   onEnter: () => void;
   onLeave: () => void;
 }) {
+  const opacity = muted ? 0.42 : faded ? 0.32 : 1;
   return (
     <div
       onMouseEnter={onEnter}
@@ -125,10 +134,10 @@ function LegendRow({
         display: "flex",
         gap: 12,
         alignItems: "flex-start",
-        cursor: "pointer",
+        cursor: muted ? "default" : "pointer",
         position: "relative",
-        opacity: faded ? 0.32 : 1,
-        padding: "11px 32px 11px 9px",
+        opacity,
+        padding: toggle ? "11px 32px 11px 9px" : "11px 9px",
         margin: "0 -9px",
         borderRadius: 9,
         backgroundColor: hovered ? hoverBg : CK.paper,
@@ -161,22 +170,36 @@ function LegendRow({
         </div>
         <div style={{ fontSize: 12.5, color: CK.ink2, lineHeight: 1.45, marginTop: 1 }}>{line}</div>
       </div>
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: 12,
-          right: 9,
-          width: 18,
-          height: 18,
-          color,
-          opacity: hovered ? 1 : 0.32,
-          transform: hovered ? "scale(1.08)" : "scale(1)",
-          transition: "opacity .15s, transform .15s",
-        }}
-      >
-        <EyeIcon size={18} />
-      </span>
+      {toggle ? (
+        <button
+          type="button"
+          aria-label={toggle.label}
+          aria-pressed={toggle.on}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggle.onChange();
+          }}
+          style={{
+            position: "absolute",
+            top: 9,
+            right: 5,
+            width: 26,
+            height: 26,
+            border: "none",
+            borderRadius: 8,
+            background: hovered || !toggle.on ? hoverBg : "transparent",
+            color,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: hovered || !toggle.on ? 1 : 0.52,
+            transition: "opacity .15s, background-color .15s",
+          }}
+        >
+          {toggle.on ? <EyeIcon size={18} /> : <EyeOffIcon size={18} />}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -190,39 +213,14 @@ function EyeIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-function Switch({ on, onChange, accent, disabled }: { on: boolean; onChange: (v: boolean) => void; accent: string; disabled?: boolean }) {
+function EyeOffIcon({ size = 12 }: { size?: number }) {
   return (
-    <button
-      onClick={() => !disabled && onChange(!on)}
-      aria-pressed={on}
-      style={{
-        position: "relative",
-        width: 38,
-        height: 21,
-        borderRadius: 999,
-        border: "none",
-        padding: 0,
-        cursor: disabled ? "default" : "pointer",
-        background: on ? accent : CK.trackOff,
-        opacity: disabled ? 0.4 : 1,
-        transition: "background-color .15s",
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 2,
-          left: on ? 19 : 2,
-          width: 17,
-          height: 17,
-          borderRadius: 999,
-          background: "#fff",
-          boxShadow: "0 1px 3px rgba(40,30,20,.35)",
-          transition: "left .16s",
-        }}
-      />
-    </button>
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3l18 18" />
+      <path d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58" />
+      <path d="M9.88 4.24A10.5 10.5 0 0 1 12 4c7 0 11 8 11 8a18.6 18.6 0 0 1-2.5 3.47" />
+      <path d="M6.61 6.61A17.1 17.1 0 0 0 1 12s4 8 11 8a10.5 10.5 0 0 0 5.39-1.61" />
+    </svg>
   );
 }
 
@@ -332,6 +330,7 @@ export function LayerReveal({
   const smoothAvail = !!M.smoothLayer && !isBar;
   const smoothOn = smoothAvail && smooth;
   const layers = withSmoothLayers(model, smoothOn);
+  const legendLayers = smoothAvail ? withSmoothLayers(model, true) : layers;
   const N = layers.length;
   const CEN = (N - 1) / 2;
   const GAP = N >= 6 ? 84 : M.gap;
@@ -344,7 +343,7 @@ export function LayerReveal({
   const hov = (key: string) => () => setHover(key);
   const unhov = () => setHover(null);
 
-  const legendList = [...layers].sort((a, b) => a.n - b.n);
+  const legendList = [...legendLayers].sort((a, b) => a.n - b.n);
 
   const META = KEYS.length <= 2 ? MODEL_META.tools : MODEL_META.all;
   const kick = kicker || META.kicker;
@@ -462,22 +461,42 @@ export function LayerReveal({
                 </span>
               </div>
             </div>
-            {legendList.map((L) => (
-              <div key={L.key} style={{ flex: narrow ? "1 1 280px" : "none", minWidth: 0 }}>
-                <LegendRow
-                  n={L.n}
-                  color={L.color}
-                  name={L.name}
-                  tag={L.tag}
-                  line={L.line(isBar)}
-                  hovered={hover === L.key}
-                  hoverBg={ROW_BG[L.key] || "#f2f0ec"}
-                  faded={dimOf(L.key)}
-                  onEnter={hov(L.key)}
-                  onLeave={unhov}
-                />
-              </div>
-            ))}
+            {legendList.map((L) => {
+              const isSmoothRow = L.key === "smooth";
+              const smoothHidden = isSmoothRow && !smoothOn;
+              const hoverBg = ROW_BG[L.key] || "#f2f0ec";
+              return (
+                <div key={L.key} style={{ flex: narrow ? "1 1 280px" : "none", minWidth: 0 }}>
+                  <LegendRow
+                    n={L.n}
+                    color={L.color}
+                    name={L.name}
+                    tag={L.tag}
+                    line={L.line(isBar)}
+                    hovered={!smoothHidden && hover === L.key}
+                    hoverBg={hoverBg}
+                    faded={dimOf(L.key)}
+                    muted={smoothHidden}
+                    toggle={
+                      isSmoothRow
+                        ? {
+                            on: smoothOn,
+                            onChange: () => {
+                              setHover(null);
+                              setSmooth(!smoothOn);
+                            },
+                            label: smoothOn
+                              ? "Hide smooth layer"
+                              : "Show smooth layer",
+                          }
+                        : undefined
+                    }
+                    onEnter={smoothHidden ? () => {} : hov(L.key)}
+                    onLeave={smoothHidden ? () => {} : unhov}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -496,12 +515,6 @@ export function LayerReveal({
             />
             <span style={{ fontFamily: CK.mono, fontSize: 13, color: CK.ink2, width: 44, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Math.round(r * 100)}%</span>
           </div>
-          {smoothAvail ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0, whiteSpace: "nowrap" }}>
-              <span style={{ fontFamily: CK.sans, fontSize: 13.5, fontWeight: 600, color: CK.ink }}>smooth</span>
-              <Switch on={smoothOn} onChange={setSmooth} accent={CK.smooth} />
-            </div>
-          ) : null}
           {hideModelSwitch || KEYS.length <= 1 ? null : (
             <div style={{ flexShrink: 0, marginLeft: "auto" }}>
               <Segmented
