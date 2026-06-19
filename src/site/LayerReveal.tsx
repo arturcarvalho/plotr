@@ -363,9 +363,23 @@ export function LayerReveal({
         </>
       )}
 
+      {hideModelSwitch || KEYS.length <= 1 ? null : (
+        <div style={{ marginTop: hideHeader ? 0 : 18 }}>
+          <Segmented
+            value={model}
+            onChange={(v) => {
+              setModel(v as ModelKey);
+              setHover(null);
+            }}
+            accent={CK.scale}
+            options={KEYS.map((k) => ({ v: k, label: MODELS[k].label, mono: k !== "gog" }))}
+          />
+        </div>
+      )}
+
       <div
         style={{
-          marginTop: hideHeader ? 0 : 22,
+          marginTop: hideHeader && (hideModelSwitch || KEYS.length <= 1) ? 0 : 22,
           background: CK.paper,
           border: `1px solid ${CK.line}`,
           borderRadius: 16,
@@ -376,72 +390,98 @@ export function LayerReveal({
         <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "1fr 312px" }}>
           {/* stage */}
           <div
+            data-layer-reveal-stage="true"
             style={{
-              position: "relative",
+              display: "flex",
+              flexDirection: "column",
               // minHeight (not height) so the stage stretches to match a taller
               // legend column — otherwise the gradient stops short and the white
               // card shows through below it.
               minHeight: stageH,
-              background: `linear-gradient(180deg, ${CK.raised}, ${CK.page})`,
-              perspective: 1300,
-              perspectiveOrigin: "50% 44%",
               overflow: "hidden",
             }}
           >
             <div
               style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                width: PW,
-                height: PH,
-                transform: `translate(-50%,-50%) rotateX(${56 * r}deg) rotateZ(${-38 * r}deg) scale(${(fit * (1 - 0.06 * r)).toFixed(3)})`,
-                transformStyle: "preserve-3d",
+                position: "relative",
+                flex: 1,
+                minHeight: 0,
+                background: `linear-gradient(180deg, ${CK.raised}, ${CK.page})`,
+                perspective: 1300,
+                perspectiveOrigin: "50% 44%",
+                overflow: "hidden",
               }}
             >
-              {layers.map((L, i) => {
-                const op = L.transform ? cl((r - 0.04) / 0.4) : 1;
-                return (
-                  <Plane
-                    key={L.key}
-                    h={i}
-                    cen={CEN}
-                    gap={GAP}
-                    r={r}
-                    opacity={op}
-                    fill={L.fill}
-                    accent={L.color}
-                    frameOn={L.frameOn}
-                    baseShadow={L.baseShadow ? "0 8px 26px -14px hsl(42 30% 22% / .3)" : undefined}
-                    hovered={hover === L.key}
-                    dim={dimOf(L.key)}
-                  >
-                    {renderContent(L.render, { ...ctx, panel: L.panel })}
-                  </Plane>
-                );
-              })}
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  width: PW,
+                  height: PH,
+                  transform: `translate(-50%,-50%) rotateX(${56 * r}deg) rotateZ(${-38 * r}deg) scale(${(fit * (1 - 0.06 * r)).toFixed(3)})`,
+                  transformStyle: "preserve-3d",
+                }}
+              >
+                {layers.map((L, i) => {
+                  const op = L.transform ? cl((r - 0.04) / 0.4) : 1;
+                  return (
+                    <Plane
+                      key={L.key}
+                      h={i}
+                      cen={CEN}
+                      gap={GAP}
+                      r={r}
+                      opacity={op}
+                      fill={L.fill}
+                      accent={L.color}
+                      frameOn={L.frameOn}
+                      baseShadow={L.baseShadow ? "0 8px 26px -14px hsl(42 30% 22% / .3)" : undefined}
+                      hovered={hover === L.key}
+                      dim={dimOf(L.key)}
+                    >
+                      {renderContent(L.render, { ...ctx, panel: L.panel })}
+                    </Plane>
+                  );
+                })}
+              </div>
+
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 16,
+                  textAlign: "center",
+                  fontFamily: CK.mono,
+                  fontSize: 12,
+                  color: CK.faint,
+                  opacity: hintOn,
+                  pointerEvents: "none",
+                }}
+              >
+                ↓ drag Reveal to take it apart
+              </div>
             </div>
 
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 16,
-                textAlign: "center",
-                fontFamily: CK.mono,
-                fontSize: 12,
-                color: CK.faint,
-                opacity: hintOn,
-                pointerEvents: "none",
-              }}
-            >
-              ↓ drag Reveal to take it apart
+            <div style={{ borderTop: `1px solid ${CK.line}`, padding: "16px 24px", display: "flex", alignItems: "center", gap: 14, background: CK.raised }}>
+              <span style={{ fontFamily: CK.sans, fontSize: 13.5, fontWeight: 600, color: CK.ink, width: 56 }}>Reveal</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.001"
+                value={r}
+                onChange={(e) => setReveal(parseFloat(e.target.value))}
+                style={{ flex: 1, accentColor: CK.scale, height: 4, cursor: "pointer" }}
+              />
+              <span style={{ fontFamily: CK.mono, fontSize: 13, color: CK.ink2, width: 44, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Math.round(r * 100)}%</span>
             </div>
           </div>
 
           {/* legend */}
           <div
+            data-layer-reveal-legend="true"
             style={{
               ...(narrow ? { borderTop: `1px solid ${CK.line}` } : { borderLeft: `1px solid ${CK.line}` }),
               padding: "18px 22px",
@@ -498,36 +538,6 @@ export function LayerReveal({
               );
             })}
           </div>
-        </div>
-
-        {/* controls */}
-        <div style={{ borderTop: `1px solid ${CK.line}`, padding: "16px 24px", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", background: CK.raised }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 240 }}>
-            <span style={{ fontFamily: CK.sans, fontSize: 13.5, fontWeight: 600, color: CK.ink, width: 56 }}>Reveal</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.001"
-              value={r}
-              onChange={(e) => setReveal(parseFloat(e.target.value))}
-              style={{ flex: 1, accentColor: CK.scale, height: 4, cursor: "pointer" }}
-            />
-            <span style={{ fontFamily: CK.mono, fontSize: 13, color: CK.ink2, width: 44, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Math.round(r * 100)}%</span>
-          </div>
-          {hideModelSwitch || KEYS.length <= 1 ? null : (
-            <div style={{ flexShrink: 0, marginLeft: "auto" }}>
-              <Segmented
-                value={model}
-                onChange={(v) => {
-                  setModel(v as ModelKey);
-                  setHover(null);
-                }}
-                accent={CK.scale}
-                options={KEYS.map((k) => ({ v: k, label: MODELS[k].label, mono: k !== "gog" }))}
-              />
-            </div>
-          )}
         </div>
       </div>
 

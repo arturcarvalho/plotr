@@ -59,6 +59,26 @@ test.describe("explainer site", () => {
     await expect(
       page.locator("pre").getByText("SELECT", { exact: true }),
     ).toBeVisible();
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const range = document.querySelector('input[type="range"]');
+          const stage = range?.closest('[data-layer-reveal-stage="true"]');
+          const legend = document.querySelector(
+            '[data-layer-reveal-legend="true"]',
+          );
+          return {
+            rangeInStage: !!stage,
+            legendInStage: !!stage && !!legend && stage.contains(legend),
+            stageHasRange: !!stage?.contains(range),
+          };
+        }),
+      )
+      .toEqual({
+        rangeInStage: true,
+        legendInStage: false,
+        stageHasRange: true,
+      });
 
     // smooth is on by default and controlled from its own legend row.
     await expect(page.getByText("DRAW smooth", { exact: true })).toBeVisible();
