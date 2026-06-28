@@ -1,5 +1,4 @@
-// Placeholder until the real walkthrough is recorded; swap in the final URL.
-const TUTORIAL_VIDEO_HREF = "https://plotr.org/tutorial";
+const TUTORIAL_VIDEO_HREF = "https://www.youtube.com/watch?v=BpmTieT5xaY";
 
 interface Props {
   // Closes the card for this session only (X button); it returns on reload.
@@ -49,7 +48,7 @@ export function GettingStartedCard({
         rel="noreferrer"
         className="mt-3 flex w-full items-center justify-center gap-2 rounded bg-amber-300 px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-400"
       >
-        ▶ Watch a 2-minute tutorial
+        ▶ Watch a 3-minute tutorial
       </a>
       <p className="mt-2 text-[11px] text-center leading-snug text-stone-500">
         Runs entirely in your browser.<br/> Your data stays in your computer.
