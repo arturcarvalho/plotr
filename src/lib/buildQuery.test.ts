@@ -6,6 +6,8 @@ import {
   CHART_LABELS,
   computeMissingRequired,
   DRAW_TYPES,
+  formatColumnIdentifier,
+  normalizeColorScales,
   pruneColorScales,
   type Aes,
   type CustomLayer,
@@ -143,6 +145,47 @@ describe("buildQuery without auto resolution (existing)", () => {
     );
     expect(q).toContain("x => 'Bill length (mm)'");
     expect(q).toContain("y => 'Bill depth (mm)'");
+  });
+});
+
+describe("generated column identifiers", () => {
+  it("leaves simple non-keyword identifiers bare", () => {
+    expect(formatColumnIdentifier("bill_len")).toBe("bill_len");
+  });
+
+  it("quotes spaces, punctuation, reserved words, and embedded quotes", () => {
+    expect(formatColumnIdentifier("bill length")).toBe('"bill length"');
+    expect(formatColumnIdentifier("bill-length")).toBe('"bill-length"');
+    expect(formatColumnIdentifier("from")).toBe('"from"');
+    expect(formatColumnIdentifier('say"what')).toBe('"say""what"');
+  });
+
+  it("uses the formatter for layer/shared mappings, facets, and partitions", () => {
+    const columns: ColumnInfo[] = [
+      { name: "bill length", kind: "numeric" },
+      { name: "from", kind: "numeric" },
+      { name: "panel name", kind: "string" },
+      { name: "group-name", kind: "string" },
+    ];
+    const q = buildQuery(
+      "uploaded",
+      [
+        {
+          id: "L",
+          draw: "point",
+          mappings: { x: "bill length" },
+          partition: ["group-name"],
+        },
+      ],
+      [],
+      columns,
+      undefined,
+      { y: "from", facet_row: "panel name" },
+    );
+    expect(q).toContain('VISUALISE "from" AS y');
+    expect(q).toContain('MAPPING "bill length" AS x');
+    expect(q).toContain('PARTITION BY "group-name"');
+    expect(q).toContain('FACET "panel name"');
   });
 });
 
@@ -1213,6 +1256,37 @@ describe("shared mappings (VISUALISE level)", () => {
     );
     expect(q).toContain("FACET species");
   });
+
+  it("ignores disabled legacy facet mappings and finds the first enabled mapped layer", () => {
+    const q = buildQuery(
+      "ggsql:penguins",
+      [
+        {
+          id: "disabled",
+          draw: "point",
+          disabled: true,
+          mappings: {
+            x: "bill_len",
+            y: "bill_dep",
+            facet_col: "island",
+          },
+        },
+        {
+          id: "enabled",
+          draw: "point",
+          mappings: {
+            x: "bill_len",
+            y: "bill_dep",
+            facet_col: "species",
+          },
+        },
+      ],
+      [],
+      [...COLS, { name: "island", kind: "string" }],
+    );
+    expect(q).toContain("FACET species");
+    expect(q).not.toContain("FACET island");
+  });
 });
 
 describe("buildQuery emits SCALE for palettes (chart-level scales)", () => {
@@ -1462,6 +1536,46 @@ describe("pruneColorScales (drop the unreachable opposite-kind palette slot)", (
       yBreaks: "0, 10",
     });
     expect(out).toEqual({ xFormat: "{:num %.0f}", yBreaks: "0, 10" });
+  });
+});
+
+describe("normalizeColorScales", () => {
+  it("uses the first enabled layer mapping when the colour panel is closed", () => {
+    const out = normalizeColorScales(
+      [
+        {
+          id: "disabled",
+          draw: "point",
+          disabled: true,
+          mappings: { fill: "bill_len" },
+        },
+        {
+          id: "enabled",
+          draw: "point",
+          mappings: { fill: "species" },
+        },
+      ],
+      {},
+      COLS,
+      {
+        fillPaletteDiscrete: "set1",
+        fillPaletteContinuous: "viridis",
+      },
+    );
+    expect(out).toEqual({ fillPaletteDiscrete: "set1" });
+  });
+
+  it("lets a shared mapping override layer mappings", () => {
+    const out = normalizeColorScales(
+      [{ id: "L", draw: "point", mappings: { fill: "species" } }],
+      { fill: "bill_len" },
+      COLS,
+      {
+        fillPaletteDiscrete: "set1",
+        fillPaletteContinuous: "viridis",
+      },
+    );
+    expect(out).toEqual({ fillPaletteContinuous: "viridis" });
   });
 });
 

@@ -1,8 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { EXAMPLE_HASH, TEXT_MISSING_LABEL_HASH, seedTutorialSeen } from "./fixtures";
+import {
+  EXAMPLE_HASH,
+  TEXT_MISSING_LABEL_HASH,
+  seedGettingStartedDismissed,
+  stateHash,
+} from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
-  await seedTutorialSeen(page);
+  await seedGettingStartedDismissed(page);
 });
 
 // A rendered chart = at least one Vega mark path in the chart pane.
@@ -17,6 +22,23 @@ test.describe("chart builder", () => {
       page.getByRole("button", { name: "Demo Dataset" }),
     ).toBeVisible();
     expect(page.url()).not.toContain("#s=");
+  });
+
+  test("CSV import stays disabled until ggsql-wasm is ready", async ({
+    page,
+  }) => {
+    await page.route("**/ggsql_wasm_bg.wasm", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.continue();
+    });
+    await page.goto("/");
+
+    const fileInput = page.locator('input[type="file"]');
+    const demo = page.getByRole("button", { name: "Demo Dataset" });
+    await expect(fileInput).toBeDisabled();
+    await expect(demo).toBeDisabled();
+    await expect(fileInput).toBeEnabled({ timeout: 10_000 });
+    await expect(demo).toBeEnabled();
   });
 
   test("loading the demo dataset persists state to the URL", async ({
@@ -87,6 +109,118 @@ test.describe("chart builder", () => {
     await expect(
       page.getByText("ggsql:penguins", { exact: true }),
     ).toBeVisible();
+  });
+
+  test("Back restores settings when the resolved chart type changes", async ({
+    page,
+  }) => {
+    const point = stateHash({
+      L: [
+        {
+          i: "L",
+          d: "auto",
+          m: { x: "bill_dep", y: "body_mass" },
+          s: { lw: 2 },
+        },
+      ],
+      t: "ggsql:penguins",
+      A: { k: "layer", i: "L" },
+      D: { k: "settings" },
+    });
+    const bar = stateHash({
+      L: [
+        {
+          i: "L",
+          d: "auto",
+          m: { x: "species", y: "body_mass" },
+        },
+      ],
+      t: "ggsql:penguins",
+      A: { k: "layer", i: "L" },
+      D: { k: "settings" },
+    });
+
+    await page.goto(`/${point}`);
+    await expect(page.locator("pre")).toContainText("linewidth => 2");
+    await page.evaluate((hash) => {
+      history.pushState(null, "", `/${hash}`);
+      dispatchEvent(new PopStateEvent("popstate"));
+    }, bar);
+    await expect(page.locator("pre")).toContainText("species AS x");
+
+    await page.goBack();
+    await expect(page.locator("pre")).toContainText("bill_dep AS x");
+    await expect(page.locator("pre")).toContainText("linewidth => 2");
+  });
+
+  test("URL restoration cancels a pending debounced filter commit", async ({
+    page,
+  }) => {
+    const first = stateHash({
+      L: [
+        {
+          i: "L",
+          d: "point",
+          m: { x: "bill_dep", y: "body_mass" },
+          s: { flt: "species = 'Adelie'" },
+        },
+      ],
+      t: "ggsql:penguins",
+      A: { k: "layer", i: "L" },
+    });
+    const restored = stateHash({
+      L: [
+        {
+          i: "L",
+          d: "point",
+          m: { x: "bill_dep", y: "body_mass" },
+          s: { flt: "species = 'Chinstrap'" },
+        },
+      ],
+      t: "ggsql:penguins",
+      A: { k: "layer", i: "L" },
+    });
+
+    await page.goto(`/${first}`);
+    const filter = page.getByPlaceholder("species = 'Adelie'");
+    await filter.fill("species = 'Gentoo'");
+    await page.evaluate((hash) => {
+      history.pushState(null, "", `/${hash}`);
+      dispatchEvent(new PopStateEvent("popstate"));
+    }, restored);
+    await page.waitForTimeout(700);
+    await expect(page.locator("pre")).toContainText("species = 'Chinstrap'");
+    await expect(page.locator("pre")).not.toContainText("species = 'Gentoo'");
+  });
+
+  test("switching layers cancels a pending debounced owner edit", async ({
+    page,
+  }) => {
+    const first = stateHash({
+      L: [
+        { i: "L1", d: "point", m: { x: "bill_dep", y: "body_mass" } },
+        { i: "L2", d: "point", m: { x: "bill_dep", y: "body_mass" } },
+      ],
+      t: "ggsql:penguins",
+      A: { k: "layer", i: "L1" },
+    });
+    const second = stateHash({
+      L: [
+        { i: "L1", d: "point", m: { x: "bill_dep", y: "body_mass" } },
+        { i: "L2", d: "point", m: { x: "bill_dep", y: "body_mass" } },
+      ],
+      t: "ggsql:penguins",
+      A: { k: "layer", i: "L2" },
+    });
+
+    await page.goto(`/${first}`);
+    await page.getByPlaceholder("species = 'Adelie'").fill("species = 'Gentoo'");
+    await page.evaluate((hash) => {
+      history.pushState(null, "", `/${hash}`);
+      dispatchEvent(new PopStateEvent("popstate"));
+    }, second);
+    await page.waitForTimeout(700);
+    await expect(page.locator("pre")).not.toContainText("FILTER");
   });
 
   test("the ⋮ menu links to the About page", async ({ page }) => {

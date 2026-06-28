@@ -36,6 +36,7 @@ export function DataPanel({
   const [dragOver, setDragOver] = useState(false);
 
   const handleFile = async (file: File) => {
+    if (!ready) return;
     const name = sanitiseTableName(file.name) || `csv_${Date.now()}`;
     const buf = await file.arrayBuffer();
     onLoadCsv(name, new Uint8Array(buf));
@@ -105,18 +106,21 @@ export function DataPanel({
           <label
             onDragOver={(e) => {
               e.preventDefault();
-              setDragOver(true);
+              if (ready) setDragOver(true);
             }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => {
               e.preventDefault();
               setDragOver(false);
+              if (!ready) return;
               const file = e.dataTransfer.files?.[0];
               if (file) handleFile(file);
             }}
             className={[
               "mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-3 py-3 text-center text-xs transition-colors",
-              dragOver
+              !ready
+                ? "cursor-not-allowed border-stone-200 bg-stone-100 text-stone-400 opacity-50"
+                : dragOver
                 ? "border-sky-400 bg-sky-50 text-sky-700"
                 : "border-stone-300 bg-stone-100 text-stone-500 hover:border-stone-400 hover:bg-stone-100",
             ].join(" ")}
@@ -144,6 +148,7 @@ export function DataPanel({
             <input
               ref={fileInputRef}
               type="file"
+              disabled={!ready}
               accept=".csv,text/csv"
               className="hidden"
               onChange={(e) => {
@@ -159,7 +164,6 @@ export function DataPanel({
           </div>
           <button
             type="button"
-            data-tutorial-target="data"
             disabled={!ready}
             onClick={onLoadPenguins}
             className="rounded border border-stone-300 bg-white px-3 py-1.5 font-mono text-xs text-stone-700 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"

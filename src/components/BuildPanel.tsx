@@ -62,7 +62,6 @@ export function BuildPanel({
   const layerById = new Map(layers.map((l) => [l.id, l]));
   const labelById = new Map(labels.map((l) => [l.id, l]));
   const customById = new Map(customLayers.map((c) => [c.id, c]));
-  const firstLayerId = order.find((o) => o.kind === "layer")?.id;
 
   // A drop can leak a click on the source card, which would toggle its panel.
   // Set on drag start, consumed by the cards' capture handler; cleared on the
@@ -131,7 +130,6 @@ export function BuildPanel({
                 <SortableCard
                   key={item.id}
                   id={item.id}
-                  tutorialTarget={item.id === firstLayerId}
                   suppressClickRef={suppressClickRef}
                 >
                   {item.kind === "layer" ? (
@@ -177,12 +175,10 @@ export function BuildPanel({
  *  focus + Enter/Space stay with the card button, which opens its panel. */
 function SortableCard({
   id,
-  tutorialTarget,
   suppressClickRef,
   children,
 }: {
   id: string;
-  tutorialTarget: boolean;
   suppressClickRef: RefObject<boolean>;
   children: ReactNode;
 }) {
@@ -206,7 +202,6 @@ function SortableCard({
         transition,
       }}
       className={["touch-none self-center", isDragging ? "relative z-10" : ""].join(" ")}
-      {...(tutorialTarget ? { "data-tutorial-target": "layer" } : {})}
     >
       {children}
     </div>

@@ -13,6 +13,7 @@ import { PanelActions } from "./PanelActions";
 
 interface Props {
   layer: Layer;
+  facetMappings: Partial<Record<Aes, string>>;
   resolvedDraw: string | null;
   openMappingAes: Aes | null;
   onMap: (aes: Aes, col: string | undefined) => void;
@@ -21,6 +22,13 @@ interface Props {
     col: string,
     src?: { layerId: string; aes: Aes },
   ) => void;
+  onMapFacet: (aes: Aes, col: string | undefined) => void;
+  onDropFacet: (
+    aes: Aes,
+    col: string,
+    src?: { layerId: string; aes: Aes },
+  ) => void;
+  facetSourceId: string;
   onToggleMappingSettings: (aes: Aes) => void;
   onOpenSettings: () => void;
   onChangeSettings: (settings: LayerSettings) => void;
@@ -36,10 +44,14 @@ interface Props {
 
 export function ChartPanel({
   layer,
+  facetMappings,
   resolvedDraw,
   openMappingAes,
   onMap,
   onDrop,
+  onMapFacet,
+  onDropFacet,
+  facetSourceId,
   onToggleMappingSettings,
   onOpenSettings,
   onChangeSettings,
@@ -83,11 +95,15 @@ export function ChartPanel({
         <MappingFields
           mappings={layer.mappings}
           sourceId={layer.id}
+          facetMappings={facetMappings}
+          facetSourceId={facetSourceId}
           resolvedDraw={resolvedDraw}
           missingRequired={missingRequired}
           openMappingAes={openMappingAes}
           onMap={onMap}
           onDrop={onDrop}
+          onMapFacet={onMapFacet}
+          onDropFacet={onDropFacet}
           onToggleSettings={onToggleMappingSettings}
           partition={layer.partition}
           onAddPartition={onAddPartition}
@@ -143,5 +159,4 @@ function FilterField({
     </div>
   );
 }
-
 

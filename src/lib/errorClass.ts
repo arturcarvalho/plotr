@@ -59,6 +59,10 @@ export const dropStaleChartErrors = (msg: string): boolean =>
 export const dropAllRenderErrors = (msg: string): boolean =>
   !isUnrecoverableError(msg) && !isChartError(msg);
 
+/** `Array.filter` predicate used after a successful CSV registration. */
+export const dropCsvLoadErrors = (msg: string): boolean =>
+  !msg.startsWith("Failed to load CSV ");
+
 /** A hard ggsql-wasm crash: the wasm linear memory is corrupted (heap OOB,
  *  a Rust `unreachable` panic, or a raw wasm `RuntimeError`). ggsql-wasm
  *  throws these under rapid / multi-layer `execute()` calls. Unlike a chart

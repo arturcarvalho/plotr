@@ -662,6 +662,52 @@ describe("sharedMappings persistence", () => {
   });
 });
 
+describe("legacy layer facet migration", () => {
+  it("promotes facets from the first enabled layer that has them", async () => {
+    const payload = await wrap({
+      L: [
+        {
+          i: "disabled",
+          d: "point",
+          x: true,
+          m: { x: "bill_len", facet_col: "island" },
+        },
+        {
+          i: "enabled",
+          d: "point",
+          m: { y: "bill_dep", facet_col: "species" },
+        },
+      ],
+      S: { facet_row: "sex" },
+    });
+    const restored = await deserialize(payload);
+    expect(restored?.sharedMappings).toEqual({
+      facet_row: "sex",
+      facet_col: "species",
+    });
+    expect(restored?.layers.map((l) => l.mappings)).toEqual([
+      { x: "bill_len" },
+      { y: "bill_dep" },
+    ]);
+  });
+
+  it("falls back to a disabled facet layer when all layers are disabled", async () => {
+    const payload = await wrap({
+      L: [
+        {
+          i: "disabled",
+          d: "point",
+          x: true,
+          m: { x: "bill_len", facet_row: "species" },
+        },
+      ],
+    });
+    const restored = await deserialize(payload);
+    expect(restored?.sharedMappings).toEqual({ facet_row: "species" });
+    expect(restored?.layers[0].mappings).toEqual({ x: "bill_len" });
+  });
+});
+
 describe("activeTable", () => {
   it("persists ggsql: built-in tables", async () => {
     const s = await serialize({

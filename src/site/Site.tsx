@@ -346,16 +346,14 @@ function AboutPage({ link }: { link: Link }) {
                   lineHeight: 1.6,
                 }}
               >
-                Play with a ready made example to see how it all fits together:
+                Watch a short tutorial to see how it all fits together:
               </p>
               <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
-                {/* opens the real chart builder pre-loaded with a demo-dataset chart
-                    (origin-relative #s= hash; full navigation so App hydrates it) */}
                 <CTA
                   primary
-                  href="/#s=H4sIAAAAAAAAE42PwU4DMQxE_2W4WqiqAFW-IXGDP0CoCo27jZpNQpxF3a7y7ygtixZxwTePnz2eCZ_gNeEF_DrBgRG9DfFhAMGCYYYSQejBE05gvDvvt1YSCGNrox23vVEFYe-8B0OT7JwoKkHbVgSvbjeEM_ieEBRc8iC10tXueHew68352077GMvhX4bz_SMYN6tLodY3QgGj6_TDc5LQDS605x5n1JtRMuhX1Ep4mue9ScmFDgTTiGR2royNeG7EHI6hJV8xp94Eu1QuL3sJYIShl-x2s9hyLMW9dylJ_gv_pFyqKqelzSgmL-a1fgFzBIVczAEAAA"
+                  href="https://www.youtube.com/watch?v=BpmTieT5xaY"
                 >
-                  Play with an example
+                  ▶ Watch a 3-minute tutorial
                 </CTA>
               </div>
             </div>

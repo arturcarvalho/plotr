@@ -5,6 +5,9 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    allowedHosts: ["debian1"],
+  },
   assetsInclude: ["**/*.wasm"],
   optimizeDeps: {
     exclude: ["ggsql-wasm"],

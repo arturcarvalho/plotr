@@ -1,9 +1,6 @@
-# CLAUDE.md
+# Codex.md
 
-Instructions for Claude when working on this project.
-
-## Writing
-- Avoid using em dashes.
+Instructions for Codex when working on this project.
 
 ## Git
 - Don't create commits unless I ask you. 
@@ -34,7 +31,6 @@ Do not write production code without a failing test driving it. Ask before skipp
 ## Other conventions
 
 - Update `MANUAL.md` whenever a user-facing feature is added, changed, or removed.
-- Keep the plan file (`~/.claude/plans/<id>.md`) up to date when planning multi-step work.
 
 ## Coding style
 

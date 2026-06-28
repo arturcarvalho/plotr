@@ -1,5 +1,6 @@
 import type { ColumnInfo } from "./ggsql";
-import { resolveDraw } from "./autoChart";
+import { resolveDraw, resolveMappingKind } from "./autoChart";
+import { normalizeFacetMappings } from "./facetMappings";
 import ggsqlPkg from "./ggsql-wasm/package.json";
 
 // Branded as a SQL-style line comment so it travels alongside the query
@@ -49,6 +50,110 @@ const GEOM_SPECIFIC_REQUIRED: Record<string, readonly Aes[]> = {
  *  persist codec, and the config summary so the rule can't drift. */
 export const isMapped = (v: unknown): v is string =>
   typeof v === "string" && v.length > 0;
+
+const RESERVED_IDENTIFIERS = new Set(
+  [
+    "all",
+    "and",
+    "as",
+    "asc",
+    "between",
+    "by",
+    "case",
+    "cast",
+    "column",
+    "create",
+    "cross",
+    "current",
+    "database",
+    "delete",
+    "desc",
+    "distinct",
+    "draw",
+    "else",
+    "end",
+    "except",
+    "exists",
+    "facet",
+    "false",
+    "filter",
+    "first",
+    "following",
+    "from",
+    "full",
+    "group",
+    "having",
+    "ilike",
+    "in",
+    "index",
+    "inner",
+    "insert",
+    "intersect",
+    "into",
+    "is",
+    "join",
+    "label",
+    "last",
+    "lateral",
+    "left",
+    "like",
+    "limit",
+    "mapping",
+    "natural",
+    "not",
+    "null",
+    "nulls",
+    "offset",
+    "on",
+    "or",
+    "order",
+    "outer",
+    "over",
+    "partition",
+    "place",
+    "preceding",
+    "project",
+    "qualify",
+    "range",
+    "remapping",
+    "right",
+    "row",
+    "rows",
+    "scale",
+    "schema",
+    "select",
+    "set",
+    "setting",
+    "table",
+    "temp",
+    "temporary",
+    "then",
+    "to",
+    "true",
+    "unbounded",
+    "union",
+    "update",
+    "values",
+    "via",
+    "view",
+    "visualise",
+    "visualize",
+    "when",
+    "where",
+    "with",
+  ],
+);
+
+/** Quote only identifiers that ggsql cannot safely parse as bare names. */
+export function formatColumnIdentifier(name: string): string {
+  if (
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) &&
+    !RESERVED_IDENTIFIERS.has(name.toLowerCase())
+  ) {
+    return name;
+  }
+  return `"${name.replaceAll('"', '""')}"`;
+}
 
 /** Returns the subset of `GEOM_SPECIFIC_REQUIRED[draw]` that the layer has
  *  not yet mapped. `null`/`undefined`/unknown draws return an empty array.
@@ -308,7 +413,9 @@ const layerFilterClause = (filter: string | undefined): string => {
 /** Per-grammar, PARTITION BY sits after FILTER on the DRAW clause. Columns are
  *  comma-joined; empty / absent emits nothing. */
 const layerPartitionClause = (partition: string[] | undefined): string =>
-  partition && partition.length ? ` PARTITION BY ${partition.join(", ")}` : "";
+  partition && partition.length
+    ? ` PARTITION BY ${partition.map(formatColumnIdentifier).join(", ")}`
+    : "";
 
 const layerSettingClause = (s: LayerSettings | undefined): string => {
   if (!s) return "";
@@ -395,6 +502,25 @@ export function pruneColorScales(
   if (!drop.some((key) => scales[key] !== undefined)) return scales;
   const next = { ...scales };
   for (const key of drop) delete next[key];
+  return next;
+}
+
+/** Normalize chart-level palette slots from the effective shared/layer colour
+ * mapping, independent of whether a colour settings panel is mounted. */
+export function normalizeColorScales(
+  layers: Layer[],
+  sharedMappings: Partial<Record<Aes, string>>,
+  columns: ColumnInfo[],
+  scales: ScaleSettings,
+): ScaleSettings {
+  let next = scales;
+  for (const aes of ["fill", "stroke"] as const) {
+    const mapped =
+      sharedMappings[aes] ??
+      layers.find((layer) => !layer.disabled && isMapped(layer.mappings[aes]))
+        ?.mappings[aes];
+    next = pruneColorScales(aes, resolveMappingKind(columns, mapped), next);
+  }
   return next;
 }
 
@@ -520,7 +646,7 @@ export function layerDrawClause(
     // errors on it. Drop a stale `y` mapping rather than pass through.
     if (a === "y" && (draw === "ribbon" || draw === "range")) return false;
     return true;
-  }).map((a) => `${layer.mappings[a]} AS ${a}`);
+  }).map((a) => `${formatColumnIdentifier(layer.mappings[a]!)} AS ${a}`);
   const mappingClause = dataMaps.length
     ? ` MAPPING ${dataMaps.join(", ")}`
     : "";
@@ -588,9 +714,13 @@ export function buildQuery(
     ...axisScaleClauseFor("y", scales),
   ];
 
+  const normalizedFacets = normalizeFacetMappings(
+    layers,
+    sharedMappings ?? {},
+  ).sharedMappings;
   const sharedPairs = sharedMappings
     ? UNIVERSAL_AESTHETICS.filter((a) => isMapped(sharedMappings[a])).map(
-        (a) => `${sharedMappings[a]} AS ${a}`,
+        (a) => `${formatColumnIdentifier(sharedMappings[a]!)} AS ${a}`,
       )
     : [];
   const visualiseLine = sharedPairs.length
@@ -598,14 +728,16 @@ export function buildQuery(
     : `VISUALISE`;
 
   const facetLines: string[] = [];
-  const fc = sharedMappings?.facet_col ?? layers[0]?.mappings.facet_col;
-  const fr = sharedMappings?.facet_row ?? layers[0]?.mappings.facet_row;
+  const fc = normalizedFacets.facet_col;
+  const fr = normalizedFacets.facet_row;
   if (fr && fc) {
-    facetLines.push(`FACET ${fr} BY ${fc}`);
+    facetLines.push(
+      `FACET ${formatColumnIdentifier(fr)} BY ${formatColumnIdentifier(fc)}`,
+    );
   } else if (fr) {
-    facetLines.push(`FACET ${fr}`);
+    facetLines.push(`FACET ${formatColumnIdentifier(fr)}`);
   } else if (fc) {
-    facetLines.push(`FACET ${fc}`);
+    facetLines.push(`FACET ${formatColumnIdentifier(fc)}`);
   }
 
   // pie forces polar projection and overrides any cartesian project settings.
